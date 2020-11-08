@@ -427,23 +427,63 @@ function hasTweet(range, tweet) {
 }
 
 //
+// Name: hasBanWords
+// Desc:
+//  Check if the specified tweet contains any ban words in the specified array of the ban words.
+//
+function hasBanWords ( tweet, banWords ){
+  for ( let i=0; i< banWords.length; i++ ) {
+    //let regex = new RegExp(banWords[i]);
+    //if ( -1 != tweet.text.search(regex) ) {
+    if ( tweet.text.includes(banWords[i]) ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//
 // Name: updateSheet
 // Desc:
 //  Add a new row and write the new Tweet data.
 //
-function updateSheet(sheet, tweets) {
+function updateSheet(sheet, tweets, banWords) {
   let lastRow = sheet.getLastRow();
   let lastCol = sheet.getLastColumn();
-  let range = sheet
-    .getRange(CELL_ROW_DATA_START, 1, lastRow, lastCol)
-    .getValues();
+  let range = sheet.getRange(CELL_ROW_DATA_START, 1, lastRow, lastCol).getValues();
   for ( let i = tweets.length - 1; i >= 0; i--) {
     if ( ! hasTweet(range, tweets[i])) {
+      if ( ! hasBanWords ( tweets[i], banWords )) {
       gsAddTweetDataAtBottom(sheet, tweets[i]);
+      }
     }
   }
 }
 
+//
+// Name: getBanWords
+// Desc:
+//  Get Ban Words in the first frow of the sheet
+//
+function getBanWords( sheet ) {
+  let banWords = [];
+  let lastCol = sheet.getLastColumn();
+  let range = sheet.getRange(CELL_ROW_KEYWORD, 2, CELL_ROW_KEYWORD, lastCol).getValues();
+  let row = range[0];
+  for (let i=0; i < row.length; i++) {
+    if ( null == row[i] || undefined == row[i] || "" == row[i]) {
+      break;
+    }
+    banWords.push(row[i]);
+  }
+  return banWords;
+}
+
+//
+// Name: main
+// Desc:
+//  Entry point of this program.
+//
 function main() {
   g_folder = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER);
   g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
@@ -461,12 +501,14 @@ function main() {
     let currentKeyword = gsGetCellVal(sheet, CELL_ROW_KEYWORD, 1);
     currentKeyword = currentKeyword == null ? "" : currentKeyword.trim();
     let lastKeyword = gsGetCellVal(sheet, CELL_ROW_LAST_KEYWORD, 2);
-    lastKeyword = lastKeyword == null ? "" : lastKeyword.trim();
+    lastKeyword = (lastKeyword == null) ? "" : lastKeyword.trim();
     gsSetCellVal(sheet, CELL_ROW_KEYWORD, 1, currentKeyword);
     gsSetCellVal(sheet, CELL_ROW_LAST_KEYWORD, 1, CELL_HEADER_LAST_KEYWORD);
     gsSetCellVal(sheet, CELL_ROW_LAST_KEYWORD, 2, currentKeyword);
     gsSetCellVal(sheet, CELL_ROW_LAST_UPDATED, 1, CELL_HEADER_LAST_UPDATED);
     gsSetCellVal(sheet, CELL_ROW_LAST_UPDATED, 2, g_datetime);
+
+    let banWords = getBanWords ( sheet );
 
     CELL_HEADER_TITLES.forEach( function (value, index) {
       gsSetCellVal(sheet, CELL_ROW_HEADER , index + 1, value );
@@ -479,7 +521,7 @@ function main() {
     }
     var tweets = twSearchTweet(currentKeyword);
     if (null != tweets && 0 < tweets.length) {
-      updateSheet(sheet, tweets);
+      updateSheet(sheet, tweets, banWords);
     }
   });
 }
