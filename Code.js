@@ -468,7 +468,8 @@ function hasBanWords ( tweet, banWords ){
 //
 function isFromBanUsers ( tweet, banUsers ){
   for ( let i=0; i< banUsers.length; i++ ) {
-    if ( tweet.user.screen_name = banUsers[i] ) {
+    //if ( tweet.screen_name == banUsers[i] ) {
+    if ( tweet.user_id_str == banUsers[i] ) {
       return true;
     }
   }
