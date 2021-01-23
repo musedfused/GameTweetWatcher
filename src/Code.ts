@@ -18,55 +18,60 @@
 // ====================================================================================================================
 
 // ID of the Target Google Spreadsheet (Book)
-let VAL_ID_TARGET_BOOK       = '1zjxr1BO7fQmO-TDP-HYOL3uh-1g1zKOCwEogX0h3uew';
+const VAL_ID_TARGET_BOOK       = '1zjxr1BO7fQmO-TDP-HYOL3uh-1g1zKOCwEogX0h3uew';
 // ID of the Google Drive where the images will be placed
-let VAL_ID_GDRIVE_FOLDER     = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
+const VAL_ID_GDRIVE_FOLDER     = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
 // Key and Secret to access Twitter APIs
-let VAL_CONSUMER_API_KEY     = 'lyhQXM3aZP5HHLqO6jjcEwzux';
-let VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct0hjr';
+const VAL_CONSUMER_API_KEY     = 'lyhQXM3aZP5HHLqO6jjcEwzux';
+const VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct0hjr';
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-let VERSION                       = 1.0;
-let TIME_LOCALE                   = "JST";
-let FORMAT_DATETIME               = "yyyy-MM-dd (HH:mm:ss)";
-let FORMAT_TIMESTAMP              = "yyyyMMddHHmmss";
-let NAME_SHEET_USAGE              = "!USAGE";
-let NAME_SHEET_LOG                = "!LOG";
-let NAME_SHEET_ERROR              = "!ERROR";
+const VERSION                               = 1.0;
+const TIME_LOCALE                           = "JST";
+const FORMAT_DATETIME                       = "yyyy-MM-dd (HH:mm:ss)";
+const FORMAT_TIMESTAMP                      = "yyyyMMddHHmmss";
+const NAME_SHEET_USAGE                      = "!USAGE";
+const NAME_SHEET_LOG                        = "!LOG";
+const NAME_SHEET_ERROR                      = "!ERROR";
 
-let SHEET_NAME_COMMON_SETTINGS    = "%settings";
+const SHEET_NAME_COMMON_SETTINGS            = "%settings";
 
-let CELL_HEADER_LIMIT             = "[limitcounttweets]";
-let CELL_HEADER_EMAIL             = "[email]";
+const CELL_SETTINGS_TITLE_LIMIT             = "[limitcounttweets]";
+const CELL_SETTINGS_TITLE_EMAIL             = "[email]";
 
-let CELL_HEADER_KEYWORD           = "[keyword]";
-let CELL_HEADER_BAN_WORDS         = "[banwords]";
-let CELL_HEADER_BAN_USERS         = "[banusers]";
+const CELL_SETTINGS_TITLE_KEYWORD           = "[keyword]";
+const CELL_SETTINGS_TITLE_BAN_WORDS         = "[banwords]";
+const CELL_SETTINGS_TITLE_BAN_USERS         = "[banusers]";
 
-let CELL_HEADER_POINT_TWEET       = "[point/tweet]";
-let CELL_HEADER_POINT_RETWEET     = "[point/retweet]";
-let CELL_HEADER_POINT_REPLY      = "[point/reply]";
-let CELL_HEADER_POINT_MEDIA       = "[point/media]";
-let CELL_HEADER_POINT_NICE        = "[point/nice]";
-let CELL_HEADER_ALERT_THRESHOLD   = "[alertthresholdpoints]";
+const CELL_SETTINGS_TITLE_DOWNLOAD_MEDIA    = "[downloadmedia]";
+const CELL_SETTINGS_TITLE_POINT_TWEET       = "[point/tweet]";
+const CELL_SETTINGS_TITLE_POINT_RETWEET     = "[point/retweet]";
+const CELL_SETTINGS_TITLE_POINT_REPLY       = "[point/reply]";
+const CELL_SETTINGS_TITLE_POINT_MEDIA       = "[point/media]";
+const CELL_SETTINGS_TITLE_POINT_FAVORITE    = "[point/nice]";
+const CELL_SETTINGS_TITLE_ALERT_THRESHOLD   = "[alertthresholdpoints]";
 
-let CELL_HEADER_LAST_KEYWORD      = "[[lastkeyword]]";
-let CELL_HEADER_LAST_UPDATED      = "[[lastupdated]]";
+const CELL_SETTINGS_TITLE_LAST_KEYWORD      = "[[lastkeyword]]";
+const CELL_SETTINGS_TITLE_LAST_UPDATED      = "[[lastupdated]]";
+const CELL_SETTINGS_TITLE_END_SETTINGS      = "//endofsettings";
 
-let CELL_HEADER_TITLES            = ["tweetid", "createdat", "userid", "username", "tweet", "screenname", "media"];
+const CELL_HEADER_TITLES            = ["tweetid", "createdat", "userid", "username", "screenname", "retweet", "favorite", "tweet", "media"];
 
-let DEFAULT_LIMIT_TWEETS          = 10;
-let DEFAULT_POINT_TWEET           = 10;
-let DEFAULT_POINT_RETWEET         = 10;
-let DEFAULT_POINT_REPLY           = 10;
-let DEFAULT_POINT_MEDIA           = 10;
-let DEFAULT_POINT_NICE            = 10;
-let DEFAULT_ALERT_THRESHOLD       = 100;
+const DEFAULT_LIMIT_TWEETS          = 10;
+const DEFAULT_DOWNLOAD_MEDIA        = true;
+const DEFAULT_POINT_TWEET           = 10;
+const DEFAULT_POINT_RETWEET         = 10;
+const DEFAULT_POINT_REPLY           = 10;
+const DEFAULT_POINT_MEDIA           = 10;
+const DEFAULT_POINT_FAVORITE        = 10;
+const DEFAULT_ALERT_THRESHOLD       = 100;
 
-let MAX_ROW_RANGE_SETTINGS        = 20;
-let MAX_COLUMN_RANGE_SETTINGS     = 30;
+const MAX_ROW_RANGE_SETTINGS        = 20;
+const MAX_COLUMN_RANGE_SETTINGS     = 30;
+
+const MAX_ROW_SEEK_HEADER           = 20;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -82,40 +87,152 @@ let g_settingsCommon              = null;
 // OBJECTS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// --------------------------------------------------------
-// object : GlobalSettings
-let Tweet = function (id_str, created_at, text, user_id_str, user_name, screen_name, list_media) {
-  this.id_str         = id_str;
-  this.created_at_str = Utilities.formatDate(new Date(created_at), TIME_LOCALE, FORMAT_DATETIME);
-  this.text           = text;
-  this.user_id_str    = user_id_str;
-  this.user_name      = user_name;
-  this.screen_name    = screen_name;
-  this.list_media     = list_media;
-};
+//
+// Tweet
+//
+class Tweet {
+  id_str         : string;
+  created_at     : string;
+  created_at_str : string;
+  text           : string;
+  user_id_str    : string;
+  user_name      : string;
+  screen_name    : string;
+  list_media     : Media[];
+  retweet_count  : number;
+  favorite_count : number;
 
-let Media = function (media_url) {
-  this.media_url      = media_url;
-};
+  constructor (
+    id_str         : string
+    , created_at     : string
+    , text           : string
+    , user_id_str    : string
+    , user_name      : string
+    , screen_name    : string
+    , list_media     : Media[]
+    , retweet_count  : number
+    , favorite_count : number) {
+      this.id_str         = id_str;
+      this.created_at     = created_at;
+      this.created_at_str = Utilities.formatDate(new Date(created_at), TIME_LOCALE, FORMAT_DATETIME);
+      this.text           = text;
+      this.user_id_str    = user_id_str;
+      this.user_name      = user_name;
+      this.screen_name    = screen_name;
+      this.list_media     = list_media;
+      this.retweet_count  = retweet_count;
+      this.favorite_count = favorite_count;
+  }
+}
+
+//
+// Media
+//
+class Media {
+  media_url : string;
+
+  constructor (media_url) {
+    this.media_url      = media_url;
+  }
+}
 
 //
 // Settings - This object will be used for as Common settings and as Particular query settings
 //
-let Settings = function (currentKeyword, lastKeyword, limitTweets, emails, banWords, banUsers, ptTweet, ptRetweet, ptReply, ptMedia, ptNice, ptAlertThreshold, rowDataStart) {
-  this.currentKeyword   = currentKeyword;
-  this.lastKeyword      = lastKeyword;
-  this.limitTweets      = limitTweets;
-  this.emails           = emails;
-  this.banWords         = banWords;
-  this.banUsers         = banUsers;
-  this.ptTweet          = ptTweet;
-  this.ptRetweet        = ptRetweet;
-  this.ptReply          = ptReply;
-  this.ptMedia          = ptMedia;
-  this.ptNice           = ptNice;
-  this.ptAlertThreshold = ptAlertThreshold;
-  this.rowDataStart     = rowDataStart;
-};
+class Settings {
+  currentKeyword   : string   ;
+  lastKeyword      : string   ;
+  limitTweets      : number   ;
+  emails           : string[] ;
+  banWords         : string[] ;
+  banUsers         : string[] ;
+  bDownloadMedia   : boolean  ;
+  ptTweet          : number   ;
+  ptRetweet        : number   ;
+  ptReply          : number   ;
+  ptMedia          : number   ;
+  ptFavorite       : number   ;
+  ptAlertThreshold : number   ;
+  rowEndSettings   : number   ;
+  headerInfo       : HeaderInfo ;
+
+  constructor (
+    currentKeyword   : string
+    , lastKeyword      : string
+    , limitTweets      : number
+    , emails           : string[]
+    , banWords         : string[]
+    , banUsers         : string[]
+    , bDownloadMedia   : boolean
+    , ptTweet          : number
+    , ptRetweet        : number
+    , ptReply          : number
+    , ptMedia          : number
+    , ptFavorite       : number
+    , ptAlertThreshold : number
+    , rowEndSettings   : number
+    , headerInfo       : HeaderInfo ) {
+      this.currentKeyword   = currentKeyword     ;
+      this.lastKeyword      = lastKeyword        ;
+      this.limitTweets      = limitTweets        ;
+      this.emails           = emails             ;
+      this.banWords         = banWords           ;
+      this.banUsers         = banUsers           ;
+      this.bDownloadMedia   = bDownloadMedia     ;
+      this.ptTweet          = ptTweet            ;
+      this.ptRetweet        = ptRetweet          ;
+      this.ptReply          = ptReply            ;
+      this.ptMedia          = ptMedia            ;
+      this.ptFavorite       = ptFavorite         ;
+      this.ptAlertThreshold = ptAlertThreshold   ;
+      this.rowEndSettings   = rowEndSettings     ;
+      this.headerInfo       = headerInfo         ;
+  }
+}
+
+//
+// Header
+//
+class HeaderInfo {
+  idx_row        : number ;
+  idx_tweetId    : number ;
+  idx_createdAt  : number ;
+  idx_userId     : number ;
+  idx_userName   : number ;
+  idx_screenName : number ;
+  idx_tweet      : number ;
+  idx_retweet    : number ;
+  idx_favorite   : number ;
+  idx_media      : number ;
+
+  constructor () {
+    this.idx_row          = null;
+    this.idx_tweetId      = null;
+    this.idx_createdAt    = null;
+    this.idx_userId       = null;
+    this.idx_userName     = null;
+    this.idx_screenName   = null;
+    this.idx_tweet        = null;
+    this.idx_retweet      = null;
+    this.idx_favorite     = null;
+    this.idx_media        = null;
+  }
+}
+
+class Stats {
+  countTweets    : number;
+  countRetweets  : number;
+  countMedias    : number;
+  countFavorites : number;
+
+  constructor() {
+    this.countTweets    = 0;
+    this.countRetweets  = 0;
+    this.countMedias    = 0;
+    this.countFavorites = 0;
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  OAuth Routines
@@ -249,28 +366,31 @@ function twSearchTweet(keywords, maxCount = DEFAULT_LIMIT_TWEETS) {
         + '&result_type=recent&lang=ja&locale=ja&count='
         + maxCount;
     let response = twitterService.fetch( url, {method:"GET"});
+    let tweets = [];
     let json = JSON.parse(response);
-    let tweets = json.statuses.map(function (tweet) {
-
-      // INFO: How to get images via Twitter API
-      // https://qiita.com/w_cota/items/a87b421ba8bc2b90a938
-      let list_media = [];
-      if (tweet.entities.media != undefined && tweet.entities.media[0].type == 'photo') {
-        for(let i=0; i < tweet.extended_entities.media.length; i++) {
-          let media_url = tweet.extended_entities.media[i].media_url;
-          list_media.push( new Media(media_url));
+    json.statuses.forEach(tweet => {
+      if ( ! tweet.retweeted_status ) {
+        // INFO: How to get images via Twitter API
+        // https://qiita.com/w_cota/items/a87b421ba8bc2b90a938
+        let list_media = [];
+        if (tweet.entities.media != undefined && tweet.entities.media[0].type == 'photo') {
+          for(let i=0; i < tweet.extended_entities.media.length; i++) {
+            let media_url = tweet.extended_entities.media[i].media_url;
+            list_media.push( new Media(media_url));
+          }
         }
+        tweets.push( new Tweet(
+          tweet.id_str
+          , tweet.created_at
+          , tweet.text
+          , tweet.user.id_str
+          , tweet.user.name
+          , tweet.user.screen_name
+          , list_media
+          , tweet.retweet_count
+          , tweet.favorite_count
+        ) );
       }
-
-      return new Tweet(
-        tweet.id_str
-        , tweet.created_at
-        , tweet.text
-        , tweet.user.id_str
-        , tweet.user.name
-        , tweet.user.screen_name
-        , list_media
-      );
     });
     return tweets;
   } catch ( ex ) {
@@ -339,22 +459,6 @@ function gsAddLineAtBottom(sheetName, text) {
 }
 
 //
-// Name: gsGetRange
-// Desc:
-//  Get array matrix to cover all values of the specified sheet.
-//
-function gsGetRange(sheet, row = 1, column = 1, numRows = 0, numColumns = 0) {
-  try {
-    let numRowsTotal = (0 < numRows )? numRows : (sheet.getLastRow() - (row-1));
-    let numColumnsTotal = (0 < numColumns)? numColumns : (sheet.getLastColumn() -(column-1));
-    return sheet.getRange(row, column, numRowsTotal, numColumnsTotal);
-  } catch (e) {
-    errOut("EXCEPTION: getRngVals: " + e);
-  }
-  return null;
-}
-
-//
 // Name: gsClearData
 // Desc:
 //  Remove all rows from ROW_DATA_START.
@@ -371,6 +475,44 @@ function gsClearData(sheet, rowDataStart) {
 // Google Spreadsheet Routines
 //
 // ====================================================================================================================
+
+//
+// Name: sendMail
+// Desc:
+//
+//
+function sendMail(sheet, stats:Stats, settings:Settings) {
+  let subject = "⚡AutoMail:TweetWatcher⚡:" + sheet.getName + ":" + settings.currentKeyword;
+  let body = "Total Points : " + getPoint(stats, settings);
+  let htmlBody = "Total Points : " + getPoint(stats, settings) + "<br>";
+  + "Threshold: " + settings.ptAlertThreshold + "<br>"
+  + "<br>"
+  + "<br>"
+  + "Stats:<br>"
+  + "<table>"
+  + "<tr><th>Item</th><th>Count</th><th>Pt/Item</th><th>Points</th></tr>"
+  + "<tr><td>Tweet</td><td>"    + stats.countTweets    + "</td><td>" + settings.ptTweet    + "</td><td>" + (stats.countTweets * settings.ptTweet)       + "</td></tr>"
+  + "<tr><td>Retweet</td><td>"  + stats.countRetweets  + "</td><td>" + settings.ptRetweet  + "</td><td>" + (stats.countRetweets * settings.ptRetweet)   + "</td></tr>"
+  + "<tr><td>Favorite</td><td>" + stats.countFavorites + "</td><td>" + settings.ptFavorite + "</td><td>" + (stats.countFavorites * settings.ptFavorite) + "</td></tr>"
+  + "<tr><td>Media</td><td>"    + stats.countMedias    + "</td><td>" + settings.ptMedia    + "</td><td>" + (stats.countMedias * settings.ptMedia)       + "</td></tr>"
+  + "</table>";
+
+  settings.emails.forEach(emailAddr => {
+    GmailApp.sendEmail(emailAddr, subject, body, {htmlBody: htmlBody} );
+  });
+}
+
+//
+// Name: getPoint
+// Desc:
+//
+//
+function getPoint(stats:Stats, settings:Settings):number {
+  return settings.ptTweet * stats.countTweets
+    + settings.ptRetweet * stats.countRetweets
+    + settings.ptMedia * stats.countMedias
+    + settings.ptFavorite * stats.countFavorites;
+}
 
 //
 // Name: downloadMedia
@@ -390,28 +532,39 @@ function downloadMedia(folder, list_media) {
 // Desc:
 //  Add the specified text at the bootom of the specified sheet.
 //
-function gsAddTweetDataAtBottom(sheet, tweet) {
+function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
   try {
     let lastRow = sheet.getLastRow();
     let rowToWrite = lastRow + 1;
-    let folder = null;
-    if ( 0 < tweet.list_media.length ) {
-      folder = g_folder.createFolder( tweet.id_str );
+    if ( 0 < tweet.list_media.length && settings.bDownloadMedia ) {
+      let strDate = Utilities.formatDate(new Date(tweet.created_at), TIME_LOCALE, "yyyy-MM-dd");
+      let foldersOfDate = g_folder.getFoldersByName(strDate);
+      let folderDate = null;
+      if (foldersOfDate.hasNext()) {
+        folderDate = foldersOfDate.next();
+      }else {
+        folderDate = g_folder.createFolder( strDate );
+      }
+      let folder = folderDate.createFolder( tweet.id_str );
       downloadMedia( folder, tweet.list_media );
     }
-    let range = gsGetRange( sheet, rowToWrite, 1, 1, 8 );
-    let rngVals = range.getValues();
+    let rangeLastRow = sheet.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES.length);
+    let rngVals = rangeLastRow.getValues();
     let row = rngVals[0];
-    row[0] = '=HYPERLINK("https://twitter.com/' + tweet.screen_name + '/status/' + tweet.id_str + '", "' + tweet.id_str + '")';
-    row[1] = tweet.created_at_str;
-    row[2] = tweet.user_id_str;
-    row[3] = tweet.user_name;
-    row[4] = tweet.text;
-    row[5] = tweet.screen_name;
+
+    row[settings.headerInfo.idx_tweetId    ] = '=HYPERLINK("https://twitter.com/' + tweet.screen_name + '/status/' + tweet.id_str + '", "' + tweet.id_str + '")';
+    row[settings.headerInfo.idx_createdAt  ] = tweet.created_at_str;
+    row[settings.headerInfo.idx_userId     ] = tweet.user_id_str;
+    row[settings.headerInfo.idx_userName   ] = tweet.user_name;
+    row[settings.headerInfo.idx_screenName ] = tweet.screen_name;
+    row[settings.headerInfo.idx_retweet    ] = tweet.retweet_count;
+    row[settings.headerInfo.idx_favorite   ] = tweet.favorite_count;
+    row[settings.headerInfo.idx_tweet      ] = tweet.text;
+
     if ( null != folder ) {
-      row[6] = folder.getUrl();
+      row[settings.headerInfo.idx_media] = folder.getUrl();
     }
-    range.setValues( rngVals );
+    rangeLastRow.setValues( rngVals );
   } catch (e) {
     Logger.log("EXCEPTION: addLine: " + e.message);
   }
@@ -422,13 +575,13 @@ function gsAddTweetDataAtBottom(sheet, tweet) {
 // Desc:
 //  Check if the specified Tweet has already been recorded (true) or not (false).
 //
-function hasTweet(range, tweet) {
+function hasTweet(range, tweet:Tweet, settings:Settings) {
   for (var r = 0; r < range.length; r++) {
     let row = range[r];
-    if (0 == row[0].length) {
+    if (0 == row[settings.headerInfo.idx_tweetId].length) {
       break;
     }
-    if (row[0] == tweet.id_str) {
+    if (row[settings.headerInfo.idx_tweetId] == tweet.id_str) {
       return true;
     }
   }
@@ -440,7 +593,7 @@ function hasTweet(range, tweet) {
 // Desc:
 //  Check if the specified tweet contains any ban words in the specified array of the ban words.
 //
-function hasBanWords ( tweet, banWords ){
+function hasBanWords ( tweet:Tweet, banWords:string[] ){
   for ( let i=0; i< banWords.length; i++ ) {
     //let regex = new RegExp(banWords[i]);
     //if ( -1 != tweet.text.search(regex) ) {
@@ -456,7 +609,7 @@ function hasBanWords ( tweet, banWords ){
 // Desc:
 //  Check if the specified tweet contains any ban words in the specified array of the ban words.
 //
-function isFromBanUsers ( tweet, banUsers ){
+function isFromBanUsers ( tweet:Tweet, banUsers:string[] ){
   for ( let i=0; i< banUsers.length; i++ ) {
     //if ( tweet.screen_name == banUsers[i] ) {
     if ( tweet.user_id_str == banUsers[i] ) {
@@ -467,95 +620,124 @@ function isFromBanUsers ( tweet, banUsers ){
 }
 
 //
+// Name: isNeededToBeAdded
+// Desc:
+//
+function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
+  let lastRow = sheet.getLastRow();
+  if ( 0 < lastRow - (settings.headerInfo.idx_row + 1 )) {
+    let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length).getValues();
+    if ( hasTweet(range, tweet, settings)) {
+      return false;
+    }
+  }
+  if ( hasBanWords ( tweet, settings.banWords ) || isFromBanUsers ( tweet, settings.banUsers ) ) {
+    return false;
+  }
+  return true;
+}
+
+//
 // Name: updateSheet
 // Desc:
 //  Add a new row and write the new Tweet data.
+// Return:
+//  Total point per update
 //
-function updateSheet(sheet, settings, tweets) {
-  let lastRow = sheet.getLastRow();
-  let lastCol = sheet.getLastColumn();
-  let range = sheet.getRange(settings.rowDataStart, 1, lastRow, lastCol).getValues();
+function updateSheet(sheet, settings:Settings, tweets:Tweet[]):Stats {
+  let stats:Stats = new Stats();
   for ( let i = tweets.length - 1; i >= 0; i--) {
-    if ( ! hasTweet(range, tweets[i])) {
-      if ( ! hasBanWords ( tweets[i], settings.banWords ) && ! isFromBanUsers ( tweets[i], settings.banUsers ) ) {
-      gsAddTweetDataAtBottom(sheet, tweets[i]);
-      }
+    if ( isNeededToBeAdded( sheet, tweets[i], settings ) ) {
+      gsAddTweetDataAtBottom(sheet, tweets[i], settings);
+      stats.countTweets ++;
+      stats.countMedias += (tweets[i].list_media.length > 0 ) ? 1 : 0;
+      stats.countRetweets += tweets[i].retweet_count;
+      stats.countFavorites += tweets[i].favorite_count;
     }
   }
+  return stats;
 }
 
 //
 // Name: getSettings
 // Desc:
-//    Get settings from the common setting sheet and each query sheet.
-//    This function supports both the Common Setting Sheet and settings for each query.
+//  Get settings from the common setting sheet and each query sheet.
+//  This function supports both the Common Setting Sheet and settings for each query.
 //
 function getSettings (sheet) {
-  let range = gsGetRange(sheet, 1, 1, MAX_ROW_RANGE_SETTINGS, MAX_COLUMN_RANGE_SETTINGS);
+  let range = sheet.getRange(1, 1, MAX_ROW_RANGE_SETTINGS, MAX_COLUMN_RANGE_SETTINGS);
   if (range == null) {
     return;
   }
 
   let currentKeyword   = "";
   let lastKeyword      = "";
-  let limitTweets      = DEFAULT_LIMIT_TWEETS;
+  let limitTweets      = null;
   let emails           = [];
   let banWords         = [];
   let banUsers         = [];
-  let ptTweet          = 0;
-  let ptRetweet        = 0;
-  let ptReply          = 0;
-  let ptMedia          = 0;
-  let ptNice           = 0;
-  let ptAlertThreshold = 0;
-  let rowDataStart     = 0;
+  let bDownloadMedia   = null;
+  let ptTweet          = null;
+  let ptRetweet        = null;
+  let ptReply          = null;
+  let ptMedia          = null;
+  let ptFavorite       = null;
+  let ptAlertThreshold = null;
+  let rowEndSettings   = null;
 
   let rngVals = range.getValues();
-  rngVals.forEach( (row, idxRow) => {
-    let title:string = String(row[0]);
-    if( !title ) {
-
-    } else {
+  for(let r = 0; r < rngVals.length ; r++) {
+    var row = rngVals[r];
+    var title:string = String(row[0]);
+    if( title ) {
       title = title.replace(/\s+/g, '').toLowerCase().trim();
       switch (title) {
-      case CELL_HEADER_LIMIT:
+      case CELL_SETTINGS_TITLE_LIMIT:
         if ( row[1] ) {
           limitTweets = Number( row[1] );
         }
         break;
 
-      case CELL_HEADER_KEYWORD:
+      case CELL_SETTINGS_TITLE_KEYWORD:
         if ( row[1] ) {
           currentKeyword = String(row[1]).trim();
           row[1] = currentKeyword;
         }
         break;
 
-      case CELL_HEADER_EMAIL:
-        for(let i=1; i<row.length; i++) {
-          let val:string = String(row[i]).trim();
+      case CELL_SETTINGS_TITLE_EMAIL:
+        for(let c=1; c<row.length; c++) {
+          let val:string = String(row[c]).trim();
           if ( !val ) break;
           emails.push( val );
         }
         break;
 
-      case CELL_HEADER_BAN_WORDS:
-        for(let i=1; i<row.length; i++) {
-          let val:string = String(row[i]).trim();
+      case CELL_SETTINGS_TITLE_BAN_WORDS:
+        for(let c=1; c<row.length; c++) {
+          let val:string = String(row[c]).trim();
           if ( !val ) break;
           banWords.push( val );
         }
         break;
 
-      case CELL_HEADER_BAN_USERS:
-        for(let i=1; i<row.length; i++) {
-          let val:string = String(row[i]).trim();
+      case CELL_SETTINGS_TITLE_BAN_USERS:
+        for(let c=1; c<row.length; c++) {
+          let val:string = String(row[c]).trim();
           if ( !val ) break;
           banUsers.push( val );
         }
         break;
 
-      case CELL_HEADER_POINT_TWEET:
+      case CELL_SETTINGS_TITLE_DOWNLOAD_MEDIA:
+        {
+          let val:string = String(row[1]).trim();
+            if ( !val ) break;
+            bDownloadMedia = (val.toLowerCase() == "yes");
+        }
+        break;
+
+      case CELL_SETTINGS_TITLE_POINT_TWEET:
         {
           let val:string = String(row[1]).trim();
             if ( !val ) break;
@@ -563,7 +745,7 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_POINT_RETWEET:
+      case CELL_SETTINGS_TITLE_POINT_RETWEET:
         {
           let val:string = String(row[1]).trim();
           if ( !val ) break;
@@ -571,7 +753,7 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_POINT_TWEET:
+      case CELL_SETTINGS_TITLE_POINT_TWEET:
         {
           let val:string = String(row[1]).trim();
           if ( !val ) break;
@@ -579,7 +761,7 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_POINT_MEDIA:
+      case CELL_SETTINGS_TITLE_POINT_MEDIA:
         {
           let val:string = String(row[1]).trim();
           if ( !val ) break;
@@ -587,15 +769,15 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_POINT_NICE:
+      case CELL_SETTINGS_TITLE_POINT_FAVORITE:
         {
           let val:string = String(row[1]).trim();
           if ( !val ) break;
-          ptNice = Number( val );
+          ptFavorite = Number( val );
         }
         break;
 
-      case CELL_HEADER_ALERT_THRESHOLD:
+      case CELL_SETTINGS_TITLE_ALERT_THRESHOLD:
         {
           let val:string = String(row[1]).trim();
           if ( !val ) break;
@@ -603,7 +785,7 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_LAST_KEYWORD:
+      case CELL_SETTINGS_TITLE_LAST_KEYWORD:
         {
           let val:string = String(row[1]);
           if ( !val ) break;
@@ -612,20 +794,25 @@ function getSettings (sheet) {
         }
         break;
 
-      case CELL_HEADER_LAST_UPDATED:
+      case CELL_SETTINGS_TITLE_LAST_UPDATED:
         {
           row[1] = g_datetime;
         }
         break;
 
-      case CELL_HEADER_TITLES[0]:
-        rowDataStart = idxRow + 2;
+      case CELL_SETTINGS_TITLE_END_SETTINGS:
+        {
+          rowEndSettings = r;
+        }
+        break;
+      }
+      if ( rowEndSettings ) {
         break;
       }
     }
-  });
+  }
   range.setValues( rngVals );
-  return new Settings (currentKeyword, lastKeyword, limitTweets, emails, banWords, banUsers, ptTweet, ptRetweet, ptReply, ptMedia, ptNice, ptAlertThreshold, rowDataStart);
+  return new Settings (currentKeyword, lastKeyword, limitTweets, emails, banWords, banUsers, bDownloadMedia, ptTweet, ptRetweet, ptReply, ptMedia, ptFavorite, ptAlertThreshold, rowEndSettings, null);
 }
 
 //
@@ -633,21 +820,104 @@ function getSettings (sheet) {
 // Desc:
 //  Returns the actual settings which cover the common settings and local settings for each sheet.
 //
-function getSettingsActual( settingsCommon, settingsLocal ) {
+function getSettingsActual( settingsCommon:Settings, settingsLocal:Settings ) {
   return new Settings (
-    settingsLocal.currentKeyword,
-    settingsLocal.lastKeyword,
-    settingsCommon.limitTweets,
-    settingsCommon.emails.concat(settingsLocal.emails)     ,
-    settingsCommon.banWords.concat(settingsLocal.banWords) ,
-    settingsCommon.banUsers.concat(settingsLocal.banUsers) ,
-    (0<settingsLocal.ptTweet)          ? settingsLocal.ptTweet          : settingsCommon.ptTweet          ,
-    (0<settingsLocal.ptRetweet)        ? settingsLocal.ptRetweet        : settingsCommon.ptRetweet        ,
-    (0<settingsLocal.ptReply)          ? settingsLocal.ptReply          : settingsCommon.ptReply          ,
-    (0<settingsLocal.ptMedia)          ? settingsLocal.ptMedia          : settingsCommon.ptMedia          ,
-    (0<settingsLocal.ptNice)           ? settingsLocal.ptNice           : settingsCommon.ptNice           ,
-    (0<settingsLocal.ptAlertThreshold) ? settingsLocal.ptAlertThreshold : settingsCommon.ptAlertThreshold ,
-    settingsLocal.rowDataStart);
+    settingsLocal.currentKeyword
+    , settingsLocal.lastKeyword
+    , settingsLocal.limitTweets      ? settingsLocal.limitTweets      : ( settingsCommon.limitTweets      ? settingsCommon.limitTweets      : DEFAULT_LIMIT_TWEETS    )
+    , settingsCommon.emails.concat(settingsLocal.emails)
+    , settingsCommon.banWords.concat(settingsLocal.banWords)
+    , settingsCommon.banUsers.concat(settingsLocal.banUsers)
+    , settingsCommon.bDownloadMedia  ? settingsCommon.bDownloadMedia  : ( settingsLocal.bDownloadMedia    ? settingsLocal.bDownloadMedia    : DEFAULT_DOWNLOAD_MEDIA  )
+    , settingsLocal.ptTweet          ? settingsLocal.ptTweet          : (settingsCommon.ptTweet           ? settingsCommon.ptTweet          : DEFAULT_POINT_TWEET     )
+    , settingsLocal.ptRetweet        ? settingsLocal.ptRetweet        : ( settingsCommon.ptRetweet        ? settingsCommon.ptRetweet        : DEFAULT_POINT_RETWEET   )
+    , settingsLocal.ptReply          ? settingsLocal.ptReply          : ( settingsCommon.ptReply          ? settingsCommon.ptReply          : DEFAULT_POINT_REPLY     )
+    , settingsLocal.ptMedia          ? settingsLocal.ptMedia          : ( settingsCommon.ptMedia          ? settingsCommon.ptMedia          : DEFAULT_POINT_MEDIA     )
+    , settingsLocal.ptFavorite       ? settingsLocal.ptFavorite       : ( settingsCommon.ptFavorite       ? settingsCommon.ptFavorite       : DEFAULT_POINT_FAVORITE  )
+    , settingsLocal.ptAlertThreshold ? settingsLocal.ptAlertThreshold : ( settingsCommon.ptAlertThreshold ? settingsCommon.ptAlertThreshold : DEFAULT_ALERT_THRESHOLD )
+    , settingsLocal.rowEndSettings
+    , null );
+}
+
+//
+// Name: getHeaders
+// Desc:
+//
+//
+function getHeaderInfo( sheet ) {
+  let range = sheet.getRange( 1, 1, MAX_ROW_SEEK_HEADER, CELL_HEADER_TITLES.length);
+  if (range == null) {
+    return;
+  }
+  let rngVals = range.getValues();
+  let r = 0, c;
+  let row;
+  let rowHeader = -1;
+  for( ; r < rngVals.length ; r++) {
+    row = rngVals[r];
+    for (c = 0; c < row.length; c ++ ) {
+      var title:string = String(row[c]);
+      title = title.replace(/\s+/g, '').toLowerCase().trim();
+      if (title == CELL_HEADER_TITLES[0]) {
+        rowHeader = r;
+        break;
+      }
+    }
+    if ( rowHeader >= 0 ) { break; }
+  }
+  if ( rowHeader == -1 ) {
+    return null;
+  }
+
+  let headerInfo = new HeaderInfo();
+  headerInfo.idx_row = r;
+  for( c = 0; c < rngVals.length; c++) {
+    var title:string = String(row[c]);
+    title = title.replace(/\s+/g, '').toLowerCase().trim();
+    switch ( title ) {
+      case "tweetid":
+        headerInfo.idx_tweetId = c;
+        break;
+      case "createdat":
+        headerInfo.idx_createdAt = c;
+        break;
+      case "userid":
+        headerInfo.idx_userId = c;
+        break;
+      case "username":
+        headerInfo.idx_userName = c;
+        break;
+      case "screenname":
+        headerInfo.idx_screenName = c;
+        break;
+      case "retweet":
+        headerInfo.idx_retweet = c;
+        break;
+      case "favorite":
+        headerInfo.idx_favorite = c;
+        break;
+      case "tweet":
+        headerInfo.idx_tweet = c;
+        break;
+      case "media":
+        headerInfo.idx_media = c;
+        break;
+    }
+  }
+  if (
+    null == headerInfo.idx_row
+    || null == headerInfo.idx_tweetId
+    || null == headerInfo.idx_createdAt
+    || null == headerInfo.idx_userId
+    || null == headerInfo.idx_userName
+    || null == headerInfo.idx_screenName
+    || null == headerInfo.idx_tweet
+    || null == headerInfo.idx_retweet
+    || null == headerInfo.idx_favorite
+    || null == headerInfo.idx_media ) {
+    return null;
+  }
+  return headerInfo;
 }
 
 //
@@ -667,25 +937,45 @@ function main() {
     if (sheetName.toLocaleLowerCase().trim().startsWith('!')) {
       return;
     }
+    //
+    // loading common settings
+    //
     if (sheetName.toLocaleLowerCase().trim() === SHEET_NAME_COMMON_SETTINGS) {
       g_settingsCommon = getSettings( sheet );
       return;
     }
+    //
+    // loading local settings
+    //
     let settingsLocal = getSettings( sheet );
-    if ( 0 == settingsLocal.rowDataStart ) {
-      errOut("Unexpected sheet was found: " + sheetName)
-      return;
-    }
+
     if ( !settingsLocal.currentKeyword || settingsLocal.lastKeyword != settingsLocal.currentKeyword ) {
-      gsClearData(sheet, settingsLocal.rowDataStart);
+      gsClearData(sheet, settingsLocal.rowEndSettings + 1);
     }
     if ( !settingsLocal.currentKeyword ) {
       return;
     }
+
+    //
+    // create temporary settings which cover common and local settings
+    //
     let settingsActual = getSettingsActual( g_settingsCommon, settingsLocal);
+
+    //
+    // get the header row info to add data
+    //
+    let headerInfo = getHeaderInfo( sheet );
+    if ( ! headerInfo ) {
+      return;
+    }
+    settingsActual.headerInfo = headerInfo;
+
     var tweets = twSearchTweet(settingsActual.currentKeyword);
     if (null != tweets && 0 < tweets.length) {
-      updateSheet(sheet, settingsActual, tweets);
+      let stats:Stats = updateSheet(sheet, settingsActual, tweets);
+      if ( getPoint(stats, settingsActual) > settingsActual.ptAlertThreshold ) {
+        sendMail(sheet, stats, settingsActual);
+      }
     }
   });
 }
