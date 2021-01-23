@@ -536,6 +536,7 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
   try {
     let lastRow = sheet.getLastRow();
     let rowToWrite = lastRow + 1;
+    let folder = null;
     if ( 0 < tweet.list_media.length && settings.bDownloadMedia ) {
       let strDate = Utilities.formatDate(new Date(tweet.created_at), TIME_LOCALE, "yyyy-MM-dd");
       let foldersOfDate = g_folder.getFoldersByName(strDate);
@@ -545,7 +546,7 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
       }else {
         folderDate = g_folder.createFolder( strDate );
       }
-      let folder = folderDate.createFolder( tweet.id_str );
+      folder = folderDate.createFolder( tweet.id_str );
       downloadMedia( folder, tweet.list_media );
     }
     let rangeLastRow = sheet.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES.length);
@@ -561,7 +562,7 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
     row[settings.headerInfo.idx_favorite   ] = tweet.favorite_count;
     row[settings.headerInfo.idx_tweet      ] = tweet.text;
 
-    if ( null != folder ) {
+    if ( folder ) {
       row[settings.headerInfo.idx_media] = folder.getUrl();
     }
     rangeLastRow.setValues( rngVals );
