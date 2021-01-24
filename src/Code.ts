@@ -9,6 +9,12 @@
 // Author:  Mune
 //
 // History:
+//  2021-01-24 : Supported the following features
+//                * loading common & local settings
+//                * point calculation
+//                * sending notification email
+//                * ISO-8601 folder for placing images
+//                * backup function
 //  2020-11-15 : Supported the following features
 //                * downloading images
 //                * ban words, ban users (screen_names)
@@ -21,6 +27,8 @@
 const VAL_ID_TARGET_BOOK       = '1zjxr1BO7fQmO-TDP-HYOL3uh-1g1zKOCwEogX0h3uew';
 // ID of the Google Drive where the images will be placed
 const VAL_ID_GDRIVE_FOLDER     = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
+// ID of the Google Drive where backup files will be placed
+const VAL_ID_GDRIVE_FOLDER_BACKUP     = '1BVPS0fXT0UzkvuIe0gDESkhHApcyxZsR';
 // Key and Secret to access Twitter APIs
 const VAL_CONSUMER_API_KEY     = 'lyhQXM3aZP5HHLqO6jjcEwzux';
 const VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct0hjr';
@@ -28,8 +36,11 @@ const VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-const VERSION                               = 1.0;
+const VERSION                               = 1.1;
+const DURATION_MONTH_BACKUP                 = 2;
 const TIME_LOCALE                           = "JST";
+const FORMAT_DATETIME_DATE                  = "yyyy-MM-dd";
+const FORMAT_DATETIME_DATE_NUM              = "yyyyMMdd";
 const FORMAT_DATETIME                       = "yyyy-MM-dd (HH:mm:ss)";
 const FORMAT_TIMESTAMP                      = "yyyyMMddHHmmss";
 const NAME_SHEET_USAGE                      = "!USAGE";
@@ -81,6 +92,7 @@ let g_isEnabledLogging            = true;
 let g_datetime                    = null;
 let g_book                        = null;
 let g_folder                      = null;
+let g_folderBackup                = null;
 let g_settingsCommon              = null;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -447,12 +459,14 @@ function gsAddLineAtBottom(sheetName, text) {
     if (lastRow == sheet.getMaxRows()) {
       sheet.insertRowsAfter(lastRow, 1);
     }
-    let range = sheet.getRange(lastRow+1, 1, 1, 2);
-    let rngVals = range.getValues();
-    let row = rngVals[0];
-    row[0] = g_datetime;
-    row[1] = String(text);
-    range.setValues( rngVals );
+    let range = sheet.getRange(lastRow+1, 1, 1, 2).getValues();
+    if ( range ){
+      let rngVals = range.getValues();
+      let row = rngVals[0];
+      row[0] = g_datetime;
+      row[1] = String(text);
+      range.setValues( rngVals );
+    }
   } catch (e) {
     Logger.log("EXCEPTION: addLine: " + e.message);
   }
@@ -538,7 +552,7 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
     let rowToWrite = lastRow + 1;
     let folder = null;
     if ( 0 < tweet.list_media.length && settings.bDownloadMedia ) {
-      let strDate = Utilities.formatDate(new Date(tweet.created_at), TIME_LOCALE, "yyyy-MM-dd");
+      let strDate = Utilities.formatDate(new Date(tweet.created_at), TIME_LOCALE, FORMAT_DATETIME_DATE);
       let foldersOfDate = g_folder.getFoldersByName(strDate);
       let folderDate = null;
       if (foldersOfDate.hasNext()) {
@@ -550,22 +564,24 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
       downloadMedia( folder, tweet.list_media );
     }
     let rangeLastRow = sheet.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES.length);
-    let rngVals = rangeLastRow.getValues();
-    let row = rngVals[0];
+    if (rangeLastRow) {
+      let rngVals = rangeLastRow.getValues();
+      let row = rngVals[0];
 
-    row[settings.headerInfo.idx_tweetId    ] = '=HYPERLINK("https://twitter.com/' + tweet.screen_name + '/status/' + tweet.id_str + '", "' + tweet.id_str + '")';
-    row[settings.headerInfo.idx_createdAt  ] = tweet.created_at_str;
-    row[settings.headerInfo.idx_userId     ] = tweet.user_id_str;
-    row[settings.headerInfo.idx_userName   ] = tweet.user_name;
-    row[settings.headerInfo.idx_screenName ] = tweet.screen_name;
-    row[settings.headerInfo.idx_retweet    ] = tweet.retweet_count;
-    row[settings.headerInfo.idx_favorite   ] = tweet.favorite_count;
-    row[settings.headerInfo.idx_tweet      ] = tweet.text;
+      row[settings.headerInfo.idx_tweetId    ] = '=HYPERLINK("https://twitter.com/' + tweet.screen_name + '/status/' + tweet.id_str + '", "' + tweet.id_str + '")';
+      row[settings.headerInfo.idx_createdAt  ] = tweet.created_at_str;
+      row[settings.headerInfo.idx_userId     ] = tweet.user_id_str;
+      row[settings.headerInfo.idx_userName   ] = tweet.user_name;
+      row[settings.headerInfo.idx_screenName ] = tweet.screen_name;
+      row[settings.headerInfo.idx_retweet    ] = tweet.retweet_count;
+      row[settings.headerInfo.idx_favorite   ] = tweet.favorite_count;
+      row[settings.headerInfo.idx_tweet      ] = tweet.text;
 
-    if ( folder ) {
-      row[settings.headerInfo.idx_media] = folder.getUrl();
+      if ( folder ) {
+        row[settings.headerInfo.idx_media] = folder.getUrl();
+      }
+      rangeLastRow.setValues( rngVals );
     }
-    rangeLastRow.setValues( rngVals );
   } catch (e) {
     Logger.log("EXCEPTION: addLine: " + e.message);
   }
@@ -576,9 +592,9 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
 // Desc:
 //  Check if the specified Tweet has already been recorded (true) or not (false).
 //
-function hasTweet(range, tweet:Tweet, settings:Settings) {
-  for (var r = 0; r < range.length; r++) {
-    let row = range[r];
+function hasTweet(rangeVals, tweet:Tweet, settings:Settings) {
+  for (var r = 0; r < rangeVals.length; r++) {
+    let row = rangeVals[r];
     if (0 == row[settings.headerInfo.idx_tweetId].length) {
       break;
     }
@@ -627,9 +643,12 @@ function isFromBanUsers ( tweet:Tweet, banUsers:string[] ){
 function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
   let lastRow = sheet.getLastRow();
   if ( 0 < lastRow - (settings.headerInfo.idx_row + 1 )) {
-    let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length).getValues();
-    if ( hasTweet(range, tweet, settings)) {
-      return false;
+    let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+    if (range) {
+      let rngVals = range.getValues();
+      if ( hasTweet(rngVals, tweet, settings)) {
+        return false;
+      }
     }
   }
   if ( hasBanWords ( tweet, settings.banWords ) || isFromBanUsers ( tweet, settings.banUsers ) ) {
@@ -930,7 +949,6 @@ function main() {
   g_datetime = TIME_LOCALE + ": " + Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME);
   g_folder = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER);
   g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
-
   let sheets = g_book.getSheets();
 
   sheets.forEach((sheet) => {
@@ -976,6 +994,73 @@ function main() {
       let stats:Stats = updateSheet(sheet, settingsActual, tweets);
       if ( getPoint(stats, settingsActual) > settingsActual.ptAlertThreshold ) {
         sendMail(sheet, stats, settingsActual);
+      }
+    }
+  });
+}
+
+function duplicateBook() {
+  // crete a backup folder of the day
+  g_folderBackup = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
+  let strDate = Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME_DATE);
+  let foldersOfDate = g_folderBackup.getFoldersByName(strDate);
+  let folderDate = null;
+  if (foldersOfDate.hasNext()) {
+    folderDate = foldersOfDate.next();
+  }else {
+    folderDate = g_folderBackup.createFolder( strDate );
+  }
+
+  // duplicate the working spreadsheet
+  let fileTarget = DriveApp.getFileById(VAL_ID_TARGET_BOOK);
+  let nameFileBackup = strDate + "_BACKUP_" + fileTarget.getName();
+  fileTarget.makeCopy(nameFileBackup, folderDate);
+}
+
+function backup() {
+
+  duplicateBook();
+
+  // remove unnecessary data from the target sheet
+  g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
+  let sheets = g_book.getSheets();
+
+  sheets.forEach((sheet) => {
+    let sheetName:string = sheet.getName();
+    if (sheetName.toLocaleLowerCase().trim().startsWith('!')) {
+      return;
+    }
+    if (sheetName.toLocaleLowerCase().trim() === SHEET_NAME_COMMON_SETTINGS) {
+      return;
+    }
+
+    let headerInfo = getHeaderInfo( sheet );
+    if ( ! headerInfo ) {
+      return;
+    }
+
+    let dateNow:Date = new Date();
+    let dateBaseBackup:Date = new Date(dateNow.setMonth(dateNow.getMonth()-DURATION_MONTH_BACKUP)); // one month before the current date
+    let lastRow = sheet.getLastRow();
+    if ( 0 < lastRow - (headerInfo.idx_row + 1 )) {
+      let range = sheet.getRange(headerInfo.idx_row + 2, 1, lastRow - (headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+      if (range) {
+        let rngVals = range.getValues();
+        let r = 0;
+        for ( ; r<rngVals.length; r++) {
+          let row = rngVals[r];
+
+          let strCreatedAt:string = String(row[headerInfo.idx_createdAt]);
+          strCreatedAt = strCreatedAt.replace('(','').replace(')','').replace(' ','T') + "+09:00";
+          let dateCreatedAt = new Date( strCreatedAt );
+          if ( dateCreatedAt.getTime() > dateBaseBackup.getTime() )
+          {
+            break;
+          }
+        }
+        if ( r > 0 ) {
+          sheet.deleteRows( headerInfo.idx_row + 2, r );
+        }
       }
     }
   });
