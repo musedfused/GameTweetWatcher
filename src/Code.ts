@@ -542,11 +542,11 @@ function downloadMedia(folder, list_media) {
 }
 
 //
-// Name: gsAddTweetDataAtBottom
+// Name: addTweetDataAtBottom
 // Desc:
 //  Add the specified text at the bootom of the specified sheet.
 //
-function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
+function addTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings, stats:Stats ) {
   try {
     let lastRow = sheet.getLastRow();
     let rowToWrite = lastRow + 1;
@@ -581,28 +581,35 @@ function gsAddTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings ) {
         row[settings.headerInfo.idx_media] = folder.getUrl();
       }
       rangeLastRow.setValues( rngVals );
+
+      stats.countTweets ++;
+      stats.countMedias += (tweet.list_media.length > 0 ) ? 1 : 0;
+      stats.countRetweets += tweet.retweet_count;
+      stats.countFavorites += tweet.favorite_count;
     }
   } catch (e) {
-    Logger.log("EXCEPTION: addLine: " + e.message);
+    Logger.log("EXCEPTION: addTweetDataAtBottom: " + e.message);
   }
 }
 
 //
-// Name: hasTweet
+// Name: updateExistingTweet
 // Desc:
-//  Check if the specified Tweet has already been recorded (true) or not (false).
+//  Check if the specified tweet contains any ban words in the specified array of the ban words.
 //
-function hasTweet(rangeVals, tweet:Tweet, settings:Settings) {
-  for (var r = 0; r < rangeVals.length; r++) {
-    let row = rangeVals[r];
-    if (0 == row[settings.headerInfo.idx_tweetId].length) {
-      break;
-    }
-    if (row[settings.headerInfo.idx_tweetId] == tweet.id_str) {
-      return true;
-    }
+function updateExistingTweet(range, rngVals, idxRow:number, tweet:Tweet, settings:Settings, stats:Stats ) {
+  try {
+    let prevCountRetweets = rngVals[idxRow][settings.headerInfo.idx_retweet];
+    let prevCountFavorites = rngVals[idxRow][settings.headerInfo.idx_favorite];
+    stats.countRetweets += (tweet.retweet_count - prevCountRetweets);
+    stats.countFavorites += (tweet.favorite_count - prevCountFavorites);
+    rngVals[idxRow][settings.headerInfo.idx_retweet] = tweet.retweet_count;
+    rngVals[idxRow][settings.headerInfo.idx_favorite] = tweet.favorite_count;
+    range.setValues( rngVals ); // Update the sheet
+    logOut( "Updated: idx row = [" + idxRow + "], id=[" + tweet.id_str + "], prev # of retweets = " + prevCountRetweets + ", new # of retweets = " + tweet.retweet_count );
+  } catch ( e ) {
+    Logger.log("EXCEPTION: aupdateExistingTweet: " + e.message);
   }
-  return false;
 }
 
 //
@@ -637,6 +644,36 @@ function isFromBanUsers ( tweet:Tweet, banUsers:string[] ){
 }
 
 //
+// Name: isSafeTweet
+// Desc:
+//
+function isSafeTweet( tweet:Tweet, settings:Settings ) {
+  if ( hasBanWords ( tweet, settings.banWords ) || isFromBanUsers ( tweet, settings.banUsers ) ) {
+    return false;
+  }
+  return true;
+}
+
+//
+// Name: getRowIndexTweets
+// Desc:
+//  Check if the specified Tweet has already been recorded (true) or not (false).
+//
+function getRowIndexTweets(rngVals, tweet:Tweet, settings:Settings) {
+  let r = 0;
+  for (; r < rngVals.length; r++) {
+    let row = rngVals[r];
+    if (!row[settings.headerInfo.idx_tweetId]) {
+      break;
+    }
+    if (row[settings.headerInfo.idx_tweetId] == tweet.id_str) {
+      return r;
+    }
+  }
+  return -1;
+}
+
+//
 // Name: isNeededToBeAdded
 // Desc:
 //
@@ -646,13 +683,10 @@ function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
     let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
     if (range) {
       let rngVals = range.getValues();
-      if ( hasTweet(rngVals, tweet, settings)) {
+      if ( -1 == getRowIndexTweets(rngVals, tweet, settings)) {
         return false;
       }
     }
-  }
-  if ( hasBanWords ( tweet, settings.banWords ) || isFromBanUsers ( tweet, settings.banUsers ) ) {
-    return false;
   }
   return true;
 }
@@ -666,13 +700,34 @@ function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
 //
 function updateSheet(sheet, settings:Settings, tweets:Tweet[]):Stats {
   let stats:Stats = new Stats();
+  let lastRow = sheet.getLastRow();
+  let isInitial = true;
+  let range = null;
+  let rngVals = null;
+  if ( 0 < lastRow - (settings.headerInfo.idx_row + 1 )) {
+    isInitial = false;
+    range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+    if (range) {
+      rngVals = range.getValues();
+    }
+  }
   for ( let i = tweets.length - 1; i >= 0; i--) {
-    if ( isNeededToBeAdded( sheet, tweets[i], settings ) ) {
-      gsAddTweetDataAtBottom(sheet, tweets[i], settings);
-      stats.countTweets ++;
-      stats.countMedias += (tweets[i].list_media.length > 0 ) ? 1 : 0;
-      stats.countRetweets += tweets[i].retweet_count;
-      stats.countFavorites += tweets[i].favorite_count;
+    if ( ! isSafeTweet( tweets[i], settings ) ) {
+      continue;
+    }
+    if ( isInitial ) {
+        // pure new Tweet which needs to be ADDED
+        addTweetDataAtBottom(sheet, tweets[i], settings, stats);
+    }
+    else if ( range && rngVals ) {
+      let idxRow = getRowIndexTweets(rngVals, tweets[i], settings);
+      if ( -1 == idxRow ) {
+        // pure new Tweet which needs to be ADDED
+        addTweetDataAtBottom(sheet, tweets[i], settings, stats);
+      } else {
+        // already recorded Tweet which needs to be UPDATED
+        updateExistingTweet(range, rngVals, idxRow, tweets[i], settings, stats);
+      }
     }
   }
   return stats;
