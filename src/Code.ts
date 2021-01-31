@@ -9,6 +9,7 @@
 // Author:  Mune
 //
 // History:
+//  2021-01-31 : Supported backup feature
 //  2021-01-24 : Supported the following features
 //                * loading common & local settings
 //                * point calculation
@@ -17,7 +18,7 @@
 //                * backup function
 //  2020-11-15 : Supported the following features
 //                * downloading images
-//                * ban words, ban users (screen_names)
+//                * ban words, ban users
 //                * create link to each tweet
 //  2020-10-19 : Initial version
 //
@@ -37,9 +38,11 @@ const VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct
 // DEFINES
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 const VERSION                               = 1.1;
-const DURATION_MONTH_BACKUP                 = 2;
+const DURATION_MONTH_BACKUP                 = 3;
 const TIME_LOCALE                           = "JST";
 const FORMAT_DATETIME_DATE                  = "yyyy-MM-dd";
+const FORMAT_DATETIME_ISO8601_DATE          = "yyyy-MM-dd";
+const FORMAT_DATETIME_ISO8601_TIME          = "HH:mm:ss";
 const FORMAT_DATETIME_DATE_NUM              = "yyyyMMdd";
 const FORMAT_DATETIME                       = "yyyy-MM-dd (HH:mm:ss)";
 const FORMAT_TIMESTAMP                      = "yyyyMMddHHmmss";
@@ -408,8 +411,8 @@ function twSearchTweet(keywords, maxCount = DEFAULT_LIMIT_TWEETS) {
   } catch ( ex ) {
     errOut( ex );
     errOut( "keyword [" + keywords + "] encoded keyword = [" + encodedKeyword + "]" );
+    return null;
   }
-  return null;
 }
 
 // ====================================================================================================================
@@ -452,14 +455,14 @@ function utGetDateTime() {
 function gsAddLineAtBottom(sheetName, text) {
   try {
     let sheet = g_book.getSheetByName(sheetName);
-    if (sheet == null) {
+    if ( !sheet ) {
       sheet = g_book.insertSheet(sheetName, g_book.getNumSheets());
     }
     let lastRow = sheet.getLastRow();
     if (lastRow == sheet.getMaxRows()) {
       sheet.insertRowsAfter(lastRow, 1);
     }
-    let range = sheet.getRange(lastRow+1, 1, 1, 2).getValues();
+    let range = sheet.getRange(lastRow+1, 1, 1, 2);
     if ( range ){
       let rngVals = range.getValues();
       let row = rngVals[0];
@@ -468,7 +471,7 @@ function gsAddLineAtBottom(sheetName, text) {
       range.setValues( rngVals );
     }
   } catch (e) {
-    Logger.log("EXCEPTION: addLine: " + e.message);
+    Logger.log("EXCEPTION: gsAddLineAtBottom: " + e.message);
   }
 }
 
@@ -496,20 +499,22 @@ function gsClearData(sheet, rowDataStart) {
 //
 //
 function sendMail(sheet, stats:Stats, settings:Settings) {
-  let subject = "⚡AutoMail:TweetWatcher⚡:" + sheet.getName + ":" + settings.currentKeyword;
-  let body = "Total Points : " + getPoint(stats, settings);
-  let htmlBody = "Total Points : " + getPoint(stats, settings) + "<br>";
-  + "Threshold: " + settings.ptAlertThreshold + "<br>"
-  + "<br>"
-  + "<br>"
-  + "Stats:<br>"
-  + "<table>"
-  + "<tr><th>Item</th><th>Count</th><th>Pt/Item</th><th>Points</th></tr>"
-  + "<tr><td>Tweet</td><td>"    + stats.countTweets    + "</td><td>" + settings.ptTweet    + "</td><td>" + (stats.countTweets * settings.ptTweet)       + "</td></tr>"
-  + "<tr><td>Retweet</td><td>"  + stats.countRetweets  + "</td><td>" + settings.ptRetweet  + "</td><td>" + (stats.countRetweets * settings.ptRetweet)   + "</td></tr>"
-  + "<tr><td>Favorite</td><td>" + stats.countFavorites + "</td><td>" + settings.ptFavorite + "</td><td>" + (stats.countFavorites * settings.ptFavorite) + "</td></tr>"
-  + "<tr><td>Media</td><td>"    + stats.countMedias    + "</td><td>" + settings.ptMedia    + "</td><td>" + (stats.countMedias * settings.ptMedia)       + "</td></tr>"
-  + "</table>";
+  let points = getPoint(stats, settings);
+  let subject = "⚡AutoMail:TweetWatcher⚡: [" + sheet.getName() + "]:[" + settings.currentKeyword + "]:" + points;
+  let body = "Total Points : " + points;
+  let htmlBody = "Total Points : "
+    + getPoint(stats, settings) + "<br>"
+    + "Threshold: " + settings.ptAlertThreshold + "<br>"
+    + "<br>"
+    + "<br>"
+    + "Stats:<br>"
+    + "<table>"
+    + "<tr><th>Item</th><th>Count</th><th>Pt/Item</th><th>Points</th></tr>"
+    + "<tr><td>Tweet</td><td>"    + stats.countTweets    + "</td><td>" + settings.ptTweet    + "</td><td>" + (stats.countTweets * settings.ptTweet)       + "</td></tr>"
+    + "<tr><td>Retweet</td><td>"  + stats.countRetweets  + "</td><td>" + settings.ptRetweet  + "</td><td>" + (stats.countRetweets * settings.ptRetweet)   + "</td></tr>"
+    + "<tr><td>Favorite</td><td>" + stats.countFavorites + "</td><td>" + settings.ptFavorite + "</td><td>" + (stats.countFavorites * settings.ptFavorite) + "</td></tr>"
+    + "<tr><td>Media</td><td>"    + stats.countMedias    + "</td><td>" + settings.ptMedia    + "</td><td>" + (stats.countMedias * settings.ptMedia)       + "</td></tr>"
+    + "</table>";
 
   settings.emails.forEach(emailAddr => {
     GmailApp.sendEmail(emailAddr, subject, body, {htmlBody: htmlBody} );
@@ -1047,37 +1052,51 @@ function main() {
     var tweets = twSearchTweet(settingsActual.currentKeyword);
     if (null != tweets && 0 < tweets.length) {
       let stats:Stats = updateSheet(sheet, settingsActual, tweets);
-      if ( getPoint(stats, settingsActual) > settingsActual.ptAlertThreshold ) {
+      let pt = getPoint(stats, settingsActual);
+      if ( pt > settingsActual.ptAlertThreshold ) {
         sendMail(sheet, stats, settingsActual);
       }
     }
   });
 }
 
-function duplicateBook() {
-  // crete a backup folder of the day
-  g_folderBackup = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
-  let strDate = Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME_DATE);
-  let foldersOfDate = g_folderBackup.getFoldersByName(strDate);
-  let folderDate = null;
-  if (foldersOfDate.hasNext()) {
-    folderDate = foldersOfDate.next();
-  }else {
-    folderDate = g_folderBackup.createFolder( strDate );
-  }
+function duplicateBook( dateNow: Date) {
+  try {
+    // crete a backup folder of the day
+    g_folderBackup = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
+    let strDate = Utilities.formatDate(dateNow, TIME_LOCALE, FORMAT_DATETIME_DATE);
+    let foldersOfDate = g_folderBackup.getFoldersByName(strDate);
+    let folderDate = null;
+    if (foldersOfDate.hasNext()) {
+      folderDate = foldersOfDate.next();
+    }else {
+      folderDate = g_folderBackup.createFolder( strDate );
+    }
 
-  // duplicate the working spreadsheet
-  let fileTarget = DriveApp.getFileById(VAL_ID_TARGET_BOOK);
-  let nameFileBackup = strDate + "_BACKUP_" + fileTarget.getName();
-  fileTarget.makeCopy(nameFileBackup, folderDate);
+    // duplicate the working spreadsheet
+    let strDateISO8601 = Utilities.formatDate(dateNow, TIME_LOCALE, FORMAT_DATETIME_ISO8601_DATE) + "T" + Utilities.formatDate(dateNow, TIME_LOCALE, FORMAT_DATETIME_ISO8601_TIME) + "+09:00"
+    let fileTarget = DriveApp.getFileById(VAL_ID_TARGET_BOOK);
+    let nameFileBackup = "BACKUP_" + strDateISO8601 + "_" + fileTarget.getName();
+    fileTarget.makeCopy(nameFileBackup, folderDate);
+    return true;
+  } catch (ex) {
+    errOut( ex );
+    return false;
+  }
 }
 
 function backup() {
 
-  duplicateBook();
+  g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
+
+  let dateNow:Date = new Date();
+
+  if ( ! duplicateBook(dateNow) ) {
+    errOut( "BACKUP: Cannot duplicate the book" );
+    return;
+  }
 
   // remove unnecessary data from the target sheet
-  g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
   let sheets = g_book.getSheets();
 
   sheets.forEach((sheet) => {
@@ -1094,8 +1113,8 @@ function backup() {
       return;
     }
 
-    let dateNow:Date = new Date();
-    let dateBaseBackup:Date = new Date(dateNow.setMonth(dateNow.getMonth()-DURATION_MONTH_BACKUP)); // one month before the current date
+    let dateBaseBackup:Date = new Date(dateNow); // duplicate the current DateNow
+    dateBaseBackup= new Date(dateBaseBackup.setMonth(dateNow.getMonth()-DURATION_MONTH_BACKUP));
     let lastRow = sheet.getLastRow();
     if ( 0 < lastRow - (headerInfo.idx_row + 1 )) {
       let range = sheet.getRange(headerInfo.idx_row + 2, 1, lastRow - (headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
