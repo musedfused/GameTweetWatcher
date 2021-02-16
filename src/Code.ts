@@ -25,7 +25,7 @@
 // ====================================================================================================================
 
 // ID of the Target Google Spreadsheet (Book)
-const VAL_ID_TARGET_BOOK       = '1zjxr1BO7fQmO-TDP-HYOL3uh-1g1zKOCwEogX0h3uew';
+const VAL_ID_TARGET_BOOK       = '18PpIEIWru0_z46FkWRt9Ac3-IEGcEhqh8BWTEC5U6i4';
 // ID of the Google Drive where the images will be placed
 const VAL_ID_GDRIVE_FOLDER     = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
 // ID of the Google Drive where backup files will be placed
@@ -71,7 +71,7 @@ const CELL_SETTINGS_TITLE_LAST_KEYWORD      = "[[lastkeyword]]";
 const CELL_SETTINGS_TITLE_LAST_UPDATED      = "[[lastupdated]]";
 const CELL_SETTINGS_TITLE_END_SETTINGS      = "//endofsettings";
 
-const CELL_HEADER_TITLES            = ["tweetid", "createdat", "userid", "username", "screenname", "retweet", "favorite", "tweet", "media"];
+const CELL_HEADER_TITLES            = ["Tweet Id", "Created at", "User Id", "User name", "Screen name", "Retweet", "Favorite", "Tweet", "Media"];
 
 const DEFAULT_LIMIT_TWEETS          = 10;
 const DEFAULT_DOWNLOAD_MEDIA        = true;
@@ -92,11 +92,12 @@ const MAX_ROW_SEEK_HEADER           = 20;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 let g_isDebugMode                 = true;
 let g_isEnabledLogging            = true;
-let g_datetime                    = null;
-let g_book                        = null;
-let g_folder                      = null;
-let g_folderBackup                = null;
 let g_settingsCommon              = null;
+
+let g_folderBackup = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
+let g_datetime     = TIME_LOCALE + ": " + Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME);
+let g_folder       = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER);
+let g_book         = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // OBJECTS
@@ -314,7 +315,8 @@ function dbgOut(text) {
 // Name: logOut
 // Desc:
 //
-function logOut(text) {
+function logOut(text:string) {
+  text = g_datetime + "\t" + text;
   if (!g_isEnabledLogging) {
     return;
   }
@@ -325,7 +327,8 @@ function logOut(text) {
 // Name: errOut
 // Desc:
 //
-function errOut(text) {
+function errOut(text:string) {
+  text = g_datetime + "\t" + text;
   gsAddLineAtBottom(NAME_SHEET_ERROR, text);
 }
 
@@ -938,7 +941,7 @@ function getHeaderInfo( sheet ) {
     for (c = 0; c < row.length; c ++ ) {
       var title:string = String(row[c]);
       title = title.replace(/\s+/g, '').toLowerCase().trim();
-      if (title == CELL_HEADER_TITLES[0]) {
+      if (title == CELL_HEADER_TITLES[0].replace(/\s+/g,'').toLowerCase().trim()) {
         rowHeader = r;
         break;
       }
@@ -1006,9 +1009,6 @@ function getHeaderInfo( sheet ) {
 //  Entry point of this program.
 //
 function main() {
-  g_datetime = TIME_LOCALE + ": " + Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME);
-  g_folder = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER);
-  g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
   let sheets = g_book.getSheets();
 
   sheets.forEach((sheet) => {
@@ -1060,6 +1060,11 @@ function main() {
   });
 }
 
+//
+// Name: duplicateBook
+// Desc:
+//  Duplicate the specified book at the specified drive
+//
 function duplicateBook( dateNow: Date) {
   try {
     // crete a backup folder of the day
@@ -1085,21 +1090,116 @@ function duplicateBook( dateNow: Date) {
   }
 }
 
-function backup() {
+//
+// Name: insertHeader
+// Desc:
+//  Insert the header row at the specified row (1-based)
+//
+function inseartHeader(sheet, row) {
+  let rangeHeader = sheet.getRange(row, 1, 1, CELL_HEADER_TITLES.length);
+  let valsHeader = rangeHeader.getValues();
+  CELL_HEADER_TITLES.forEach( (val, c) =>{
+    valsHeader[0][c] = val;
+  } );
+  rangeHeader.setValues(valsHeader);
+}
 
-  g_book = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
-
-  let dateNow:Date = new Date();
-
-  if ( ! duplicateBook(dateNow) ) {
-    errOut( "BACKUP: Cannot duplicate the book" );
-    return;
+//
+// Name: getSheet
+// Desc:
+//  Get access to the specified sheet in the book for backup, and if it doesn't exist, create the book and sheet
+//
+function getSheet( folderParent, pathTarget:string, nameSheet:string, indexSheet:number ) {
+  let pathSplit = pathTarget.split("/");
+  let listPath = [];
+  let nameFile = null;
+  for( let i=0 ; i<pathSplit.length; i++) {
+    if (pathSplit[i].length > 0 ) {
+      if ( i == pathSplit.length -1) {
+        nameFile = pathSplit[i];
+        break;
+      }
+      listPath.push(pathSplit[i]);
+    }
+  }
+  if ( null == nameFile ) {
+    errOut("getFile() - wrong path name - " + pathTarget );
+    return null;
   }
 
-  // remove unnecessary data from the target sheet
-  let sheets = g_book.getSheets();
+  let folderTarget = folderParent;
+  for(let i = 0; i<listPath.length; i++){
+    if( folderTarget.getFoldersByName(listPath[i]).hasNext()){
+      folderTarget = folderTarget.getFoldersByName(listPath[i]).next();
+    } else {
+      folderTarget = folderTarget.createFolder( listPath[i] );
+    }
+  }
+  let fileTarget = folderTarget.getFilesByName(nameFile)
+  let book = null;
+  let sheet = null;
+  if (fileTarget && fileTarget.hasNext()) {
+    let file = fileTarget.next();
+    book = SpreadsheetApp.openById(file.getId());
+    sheet = book.getSheetByName(nameSheet);
+    if ( !sheet ) {
+      sheet = book.insertSheet(nameSheet, indexSheet);
+      inseartHeader( sheet, 1);
+    }
+  } else {
+    book = SpreadsheetApp.create(nameFile);
+    book.getActiveSheet().setName(nameSheet);
+    let idBook = DriveApp.getFileById(book.getId());
+    folderTarget.addFile(idBook);
+    sheet = book.getActiveSheet();
+    inseartHeader( sheet, 1);
+  }
+  return sheet;
+}
 
-  sheets.forEach((sheet) => {
+//
+// Name: getSheet
+// Desc:
+//  Get access to the specified book on G-drive, and if it doesn't exist, create the file
+//
+function moveData( nameBook:string, nameSheet:string, indexSheet:number, rngValsSrc:number[][], rowStart:number, rowNum:number ) {
+  try {
+    let sheetBackup = getSheet(g_folderBackup, nameBook, nameSheet, indexSheet);
+
+    let lastRowBackup = sheetBackup.getLastRow();
+    let maxRowsBackup = sheetBackup.getMaxRows();
+
+    if ( maxRowsBackup - lastRowBackup < rowNum ) {
+      sheetBackup.insertRowsAfter(sheetBackup.getMaxRows(), rowNum - (maxRowsBackup - lastRowBackup));
+    }
+    let rangeBackup = sheetBackup.getRange(sheetBackup.getLastRow() + 1, 1, rowNum, CELL_HEADER_TITLES.length);
+    if ( rangeBackup ) {
+      let rngValsBackup = rangeBackup.getValues();
+      for ( let r=0; r<rowNum; r++) {
+        for (let c=0; c< CELL_HEADER_TITLES.length; c++){
+          rngValsBackup[r][c] = rngValsSrc[rowStart + r][c];
+        }
+        rngValsBackup[r][0] = '=HYPERLINK("https://twitter.com/' + rngValsBackup[r][4] + '/status/' + rngValsBackup[r][0] + '", "' + rngValsBackup[r][0] + '")';
+      }
+      rangeBackup.setValues(rngValsBackup);
+    }
+    return true;
+  } catch (ex) {
+    errOut( "moveData: " + ex );
+    return false;
+  }
+}
+
+//
+// Name: backup
+// Desc:
+//  Entry point for backup
+//
+function backup() {
+  let sheets = g_book.getSheets();
+  let nameBook = g_book.getName();
+
+  sheets.forEach((sheet, index) => {
     let sheetName:string = sheet.getName();
     if (sheetName.toLocaleLowerCase().trim().startsWith('!')) {
       return;
@@ -1113,29 +1213,50 @@ function backup() {
       return;
     }
 
-    let dateBaseBackup:Date = new Date(dateNow); // duplicate the current DateNow
-    dateBaseBackup= new Date(dateBaseBackup.setMonth(dateNow.getMonth()-DURATION_MONTH_BACKUP));
+    let lastFullYear:number = -1;
+    let lastMonth:number = -1;
     let lastRow = sheet.getLastRow();
     if ( 0 < lastRow - (headerInfo.idx_row + 1 )) {
       let range = sheet.getRange(headerInfo.idx_row + 2, 1, lastRow - (headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
       if (range) {
         let rngVals = range.getValues();
+        let rowNumBackuped = 0;
         let r = 0;
-        for ( ; r<rngVals.length; r++) {
+        for ( ; r < rngVals.length; r++) {
           let row = rngVals[r];
 
           let strCreatedAt:string = String(row[headerInfo.idx_createdAt]);
           strCreatedAt = strCreatedAt.replace('(','').replace(')','').replace(' ','T') + "+09:00";
           let dateCreatedAt = new Date( strCreatedAt );
-          if ( dateCreatedAt.getTime() > dateBaseBackup.getTime() )
-          {
-            break;
+
+          let year:number = dateCreatedAt.getFullYear();
+          let month:number = 1 + dateCreatedAt.getMonth();
+
+          if ( lastMonth == -1 ) {
+            lastFullYear = year;
+            lastMonth = month;
+          } else if ( month != lastMonth ) {
+            let strYear:string = String(lastFullYear);
+            let strMonth:string = ('00'+lastMonth).slice(-2);
+            if ( ! moveData( nameBook + "/" + strYear + "-" + strMonth, sheetName, index, rngVals, rowNumBackuped, r - rowNumBackuped) ) {
+              errOut("BACKUP PROCESS WAS TERMINATED.");
+              return;
+            }
+            lastFullYear = year;
+            lastMonth = month;
+            rowNumBackuped = r;
           }
         }
-        if ( r > 0 ) {
-          sheet.deleteRows( headerInfo.idx_row + 2, r );
+        if ( r - rowNumBackuped > 0 ) {
+            let strYear:string = String(lastFullYear);
+            let strMonth:string = ('00'+lastMonth).slice(-2);
+            if ( ! moveData( nameBook + "/" + strYear + "_" + strMonth, sheetName, index, rngVals, rowNumBackuped, r - rowNumBackuped) ) {
+              errOut("BACKUP PROCESS WAS TERMINATED.");
+              return;
+            }
         }
       }
+      sheet.deleteRows(headerInfo.idx_row + 2, lastRow - (headerInfo.idx_row + 1 ));
     }
   });
 }
