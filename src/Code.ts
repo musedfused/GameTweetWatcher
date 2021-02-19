@@ -9,6 +9,8 @@
 // Author:  Mune
 //
 // History:
+//  2021-02-18 : Supported storing history data
+//  2021-02-17 : Supported backup feature as expected by the team
 //  2021-01-31 : Supported backup feature
 //  2021-01-24 : Supported the following features
 //                * loading common & local settings
@@ -25,20 +27,22 @@
 // ====================================================================================================================
 
 // ID of the Target Google Spreadsheet (Book)
-const VAL_ID_TARGET_BOOK       = '18PpIEIWru0_z46FkWRt9Ac3-IEGcEhqh8BWTEC5U6i4';
+const VAL_ID_TARGET_BOOK              = '18PpIEIWru0_z46FkWRt9Ac3-IEGcEhqh8BWTEC5U6i4';
 // ID of the Google Drive where the images will be placed
-const VAL_ID_GDRIVE_FOLDER     = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
+const VAL_ID_GDRIVE_FOLDER_MEDIA      = '1ttFnVjcZJNJdloaT4ni99ZbEYuEj-WAA';
 // ID of the Google Drive where backup files will be placed
 const VAL_ID_GDRIVE_FOLDER_BACKUP     = '1BVPS0fXT0UzkvuIe0gDESkhHApcyxZsR';
+// ID of the Google Drive where history files will be placed
+const VAL_ID_GDRIVE_FOLDER_HISTORY    = '18quvxDih5xm59htcaPRtuzeDAu5fPmt0';
 // Key and Secret to access Twitter APIs
-const VAL_CONSUMER_API_KEY     = 'lyhQXM3aZP5HHLqO6jjcEwzux';
-const VAL_CONSUMER_API_SECRET  = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct0hjr';
+const VAL_CONSUMER_API_KEY            = 'lyhQXM3aZP5HHLqO6jjcEwzux';
+const VAL_CONSUMER_API_SECRET         = 'ODBAEfj4VlgVf1BKHJyoz6QwryiaNtcchkr4PikzjSHmct0hjr';
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 const VERSION                               = 1.1;
-const DURATION_MONTH_BACKUP                 = 3;
+const DURATION_MILLISEC_NOT_FOR_BACKUP      = 7 * 24 * 60 * 60 * 1000;
 const TIME_LOCALE                           = "JST";
 const FORMAT_DATETIME_DATE                  = "yyyy-MM-dd";
 const FORMAT_DATETIME_ISO8601_DATE          = "yyyy-MM-dd";
@@ -71,7 +75,8 @@ const CELL_SETTINGS_TITLE_LAST_KEYWORD      = "[[lastkeyword]]";
 const CELL_SETTINGS_TITLE_LAST_UPDATED      = "[[lastupdated]]";
 const CELL_SETTINGS_TITLE_END_SETTINGS      = "//endofsettings";
 
-const CELL_HEADER_TITLES            = ["Tweet Id", "Created at", "User Id", "User name", "Screen name", "Retweet", "Favorite", "Tweet", "Media"];
+const CELL_HEADER_TITLES_DATA               = ["Tweet Id", "Created at", "User Id", "User name", "Screen name", "Retweet", "Favorite", "Tweet", "Media"];
+const CELL_HEADER_TITLES_HISTORY            = ["date time", "keyword", "pt/Tweet", "pt/Retweet", "pt/Media", "pt/Fav", "Threshold", "", "Total", "Tweets", "Retweets", "Media", "Favs"];
 
 const DEFAULT_LIMIT_TWEETS          = 10;
 const DEFAULT_DOWNLOAD_MEDIA        = true;
@@ -94,10 +99,12 @@ let g_isDebugMode                 = true;
 let g_isEnabledLogging            = true;
 let g_settingsCommon              = null;
 
-let g_folderBackup = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
-let g_datetime     = TIME_LOCALE + ": " + Utilities.formatDate(new Date(), TIME_LOCALE, FORMAT_DATETIME);
-let g_folder       = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER);
-let g_book         = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
+let g_folderBackup                = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_BACKUP);
+let g_datetime                    = new Date();
+let g_timestamp                   = TIME_LOCALE + ": " + Utilities.formatDate(g_datetime, TIME_LOCALE, FORMAT_DATETIME);
+let g_folderMedia                 = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_MEDIA);
+let g_folderHistory               = DriveApp.getFolderById(VAL_ID_GDRIVE_FOLDER_HISTORY);
+let g_book                        = SpreadsheetApp.openById(VAL_ID_TARGET_BOOK);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // OBJECTS
@@ -316,7 +323,7 @@ function dbgOut(text) {
 // Desc:
 //
 function logOut(text:string) {
-  text = g_datetime + "\t" + text;
+  text = g_timestamp + "\t" + text;
   if (!g_isEnabledLogging) {
     return;
   }
@@ -328,7 +335,7 @@ function logOut(text:string) {
 // Desc:
 //
 function errOut(text:string) {
-  text = g_datetime + "\t" + text;
+  text = g_timestamp + "\t" + text;
   gsAddLineAtBottom(NAME_SHEET_ERROR, text);
 }
 
@@ -467,11 +474,11 @@ function gsAddLineAtBottom(sheetName, text) {
     }
     let range = sheet.getRange(lastRow+1, 1, 1, 2);
     if ( range ){
-      let rngVals = range.getValues();
-      let row = rngVals[0];
-      row[0] = g_datetime;
+      let valsRange = range.getValues();
+      let row = valsRange[0];
+      row[0] = g_timestamp;
       row[1] = String(text);
-      range.setValues( rngVals );
+      range.setValues( valsRange );
     }
   } catch (e) {
     Logger.log("EXCEPTION: gsAddLineAtBottom: " + e.message);
@@ -509,6 +516,9 @@ function sendMail(sheet, stats:Stats, settings:Settings) {
     + getPoint(stats, settings) + "<br>"
     + "Threshold: " + settings.ptAlertThreshold + "<br>"
     + "<br>"
+    + "<a href='https://docs.google.com/spreadsheets/d/" + VAL_ID_TARGET_BOOK + "/edit'>&lt;Link to the Spreadsheet&gt;</a><br>"
+    + "Sheet name: " + sheet.getName() + "<br>"
+    + "Keyword: " + settings.currentKeyword + "<br>"
     + "<br>"
     + "Stats:<br>"
     + "<table>"
@@ -537,16 +547,148 @@ function getPoint(stats:Stats, settings:Settings):number {
 }
 
 //
+// Name: insertHeaderData
+// Desc:
+//  Insert the header row at the specified row (1-based)
+//
+function inseartHeaderData(sheet, row) {
+  let rangeHeader = sheet.getRange(row, 1, 1, CELL_HEADER_TITLES_DATA.length);
+  let valsHeader = rangeHeader.getValues();
+  CELL_HEADER_TITLES_DATA.forEach( (val, c) =>{
+    valsHeader[0][c] = val;
+  } );
+  rangeHeader.setValues(valsHeader);
+}
+
+//
+// Name: insertHeaderHistory
+// Desc:
+//  Insert the header row at the specified row (1-based)
+//
+function inseartHeaderHistory(sheet, row) {
+  let rangeHeader = sheet.getRange(row, 1, 1, CELL_HEADER_TITLES_HISTORY.length);
+  let valsHeader = rangeHeader.getValues();
+  CELL_HEADER_TITLES_HISTORY.forEach( (val, c) =>{
+    valsHeader[0][c] = val;
+  } );
+  rangeHeader.setValues(valsHeader);
+}
+
+//
+// Name: getSheet
+// Desc:
+//  Get access to the specified sheet in the specified book, and if the book and the sheet don't exist, create them accordingly.
+//  This function is used for backup feature and storing history data.
+//
+function getSheet( folderParent, pathTarget:string, nameSheet:string, indexSheet:number, drawHeaderFunc ) {
+  let pathSplit = pathTarget.split("/");
+  let listPath = [];
+  let nameFile = null;
+  for( let i=0 ; i<pathSplit.length; i++) {
+    if (pathSplit[i].length > 0 ) {
+      if ( i == pathSplit.length -1) {
+        nameFile = pathSplit[i];
+        break;
+      }
+      listPath.push(pathSplit[i]);
+    }
+  }
+  if ( null == nameFile ) {
+    errOut("getFile() - wrong path name - " + pathTarget );
+    return null;
+  }
+
+  let folderTarget = folderParent;
+  for(let i = 0; i<listPath.length; i++){
+    if( folderTarget.getFoldersByName(listPath[i]).hasNext()){
+      folderTarget = folderTarget.getFoldersByName(listPath[i]).next();
+    } else {
+      folderTarget = folderTarget.createFolder( listPath[i] );
+    }
+  }
+  let fileTarget = folderTarget.getFilesByName(nameFile)
+  let book = null;
+  let sheet = null;
+  if (fileTarget && fileTarget.hasNext()) {
+    let file = fileTarget.next();
+    book = SpreadsheetApp.openById(file.getId());
+    sheet = book.getSheetByName(nameSheet);
+    if ( !sheet ) {
+      sheet = book.insertSheet(nameSheet, indexSheet);
+      drawHeaderFunc( sheet, 1);
+    }
+  } else {
+    book = SpreadsheetApp.create(nameFile);
+    book.getActiveSheet().setName(nameSheet);
+    let idBook = DriveApp.getFileById(book.getId());
+    folderTarget.addFile(idBook);
+    sheet = book.getActiveSheet();
+    drawHeaderFunc( sheet, 1);
+  }
+  return sheet;
+}
+
+//
+// Name: addHistory
+// Desc:
+//
+//
+function addHistory( nameSheet:string, indexSheet:number, stats:Stats, settings:Settings ) {
+  let fullYear:number = g_datetime.getFullYear();
+  let month:number = 1 + g_datetime.getMonth();
+  let nameBook:string = g_book.getName() + "/" + String(fullYear)+ "_" + ('00'+month).slice(-2);
+  let sheetHistory = getSheet(g_folderHistory, nameBook, nameSheet, indexSheet, inseartHeaderHistory);
+  let lastRow = sheetHistory.getLastRow();
+  let rowToWrite = lastRow + 1;
+  if ( rowToWrite > sheetHistory.getMaxRows() ) {
+    sheetHistory.insertRowsAfter(lastRow, 1);
+  }
+
+  let rangeLastRow = sheetHistory.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES_HISTORY.length);
+  if (rangeLastRow) {
+    let valsRange = rangeLastRow.getValues();
+    valsRange[0][0] = g_timestamp;
+    valsRange[0][1] = settings.currentKeyword;
+    valsRange[0][2] = settings.ptTweet;
+    valsRange[0][3] = settings.ptRetweet;
+    valsRange[0][4] = settings.ptMedia;
+    valsRange[0][5] = settings.ptFavorite;
+    valsRange[0][6] = settings.ptAlertThreshold;
+    valsRange[0][7] = "";
+    valsRange[0][8] = getPoint(stats, settings);;
+    valsRange[0][9] = stats.countTweets;
+    valsRange[0][10] = stats.countRetweets;
+    valsRange[0][11] = stats.countMedias;
+    valsRange[0][12] = stats.countFavorites;
+    rangeLastRow.setValues(valsRange);
+  }
+}
+
+//
 // Name: downloadMedia
 // Desc:
-//  Download media files (image) according to the list of media (list_media).
+//  Download media used in a tweet in the date folder.
 //
-function downloadMedia(folder, list_media) {
-  list_media.forEach ( media => {
-    // console.log( media );
-    let imageBlob = UrlFetchApp.fetch(media.media_url).getBlob();
-    folder.createFile(imageBlob);
-  } );
+function downloadMedia( tweet:Tweet, dateCreatedAt:Date, settings:Settings) {
+  let folderMedia = null;
+  if ( 0 < tweet.list_media.length && settings.bDownloadMedia ) {
+    let strDate = Utilities.formatDate(dateCreatedAt, TIME_LOCALE, FORMAT_DATETIME_DATE);
+    let foldersOfDate = g_folderMedia.getFoldersByName(strDate);
+    let folderDate = null;
+    if (foldersOfDate.hasNext()) {
+      folderDate = foldersOfDate.next();
+    }else {
+      folderDate = g_folderMedia.createFolder( strDate );
+    }
+    folderMedia = folderDate.createFolder( tweet.id_str );
+
+    tweet.list_media.forEach ( media => {
+      // console.log( media );
+      let imageBlob = UrlFetchApp.fetch(media.media_url).getBlob();
+      folderMedia.createFile(imageBlob);
+    } );
+  }
+  return folderMedia;
 }
 
 //
@@ -554,27 +696,21 @@ function downloadMedia(folder, list_media) {
 // Desc:
 //  Add the specified text at the bootom of the specified sheet.
 //
-function addTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings, stats:Stats ) {
+function addTweetDataAtBottom(sheet, indexSheet:number, tweet:Tweet, settings:Settings, stats:Stats ) {
   try {
     let lastRow = sheet.getLastRow();
     let rowToWrite = lastRow + 1;
-    let folder = null;
-    if ( 0 < tweet.list_media.length && settings.bDownloadMedia ) {
-      let strDate = Utilities.formatDate(new Date(tweet.created_at), TIME_LOCALE, FORMAT_DATETIME_DATE);
-      let foldersOfDate = g_folder.getFoldersByName(strDate);
-      let folderDate = null;
-      if (foldersOfDate.hasNext()) {
-        folderDate = foldersOfDate.next();
-      }else {
-        folderDate = g_folder.createFolder( strDate );
-      }
-      folder = folderDate.createFolder( tweet.id_str );
-      downloadMedia( folder, tweet.list_media );
+    if ( rowToWrite > sheet.getMaxRows() ) {
+      sheet.insertRowsAfter(lastRow, 1);
     }
-    let rangeLastRow = sheet.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES.length);
+
+    let dateCreatedAt = new Date(tweet.created_at);
+    let folderMedia = downloadMedia( tweet, dateCreatedAt, settings);
+
+    let rangeLastRow = sheet.getRange( rowToWrite, 1, 1, CELL_HEADER_TITLES_DATA.length);
     if (rangeLastRow) {
-      let rngVals = rangeLastRow.getValues();
-      let row = rngVals[0];
+      let valsRange = rangeLastRow.getValues();
+      let row = valsRange[0];
 
       row[settings.headerInfo.idx_tweetId    ] = '=HYPERLINK("https://twitter.com/' + tweet.screen_name + '/status/' + tweet.id_str + '", "' + tweet.id_str + '")';
       row[settings.headerInfo.idx_createdAt  ] = tweet.created_at_str;
@@ -585,10 +721,10 @@ function addTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings, stats:Stats
       row[settings.headerInfo.idx_favorite   ] = tweet.favorite_count;
       row[settings.headerInfo.idx_tweet      ] = tweet.text;
 
-      if ( folder ) {
-        row[settings.headerInfo.idx_media] = folder.getUrl();
+      if ( folderMedia ) {
+        row[settings.headerInfo.idx_media] = folderMedia.getUrl();
       }
-      rangeLastRow.setValues( rngVals );
+      rangeLastRow.setValues( valsRange );
 
       stats.countTweets ++;
       stats.countMedias += (tweet.list_media.length > 0 ) ? 1 : 0;
@@ -605,16 +741,16 @@ function addTweetDataAtBottom(sheet, tweet:Tweet, settings:Settings, stats:Stats
 // Desc:
 //  Check if the specified tweet contains any ban words in the specified array of the ban words.
 //
-function updateExistingTweet(range, rngVals, idxRow:number, tweet:Tweet, settings:Settings, stats:Stats ) {
+function updateExistingTweet(range, valsRange, idxRow:number, tweet:Tweet, settings:Settings, stats:Stats ) {
   try {
-    let prevCountRetweets = rngVals[idxRow][settings.headerInfo.idx_retweet];
-    let prevCountFavorites = rngVals[idxRow][settings.headerInfo.idx_favorite];
+    let prevCountRetweets = valsRange[idxRow][settings.headerInfo.idx_retweet];
+    let prevCountFavorites = valsRange[idxRow][settings.headerInfo.idx_favorite];
     stats.countRetweets += (tweet.retweet_count - prevCountRetweets);
     stats.countFavorites += (tweet.favorite_count - prevCountFavorites);
-    rngVals[idxRow][settings.headerInfo.idx_retweet] = tweet.retweet_count;
-    rngVals[idxRow][settings.headerInfo.idx_favorite] = tweet.favorite_count;
-    range.setValues( rngVals ); // Update the sheet
-    logOut( "Updated: idx row = [" + idxRow + "], id=[" + tweet.id_str + "], prev # of retweets = " + prevCountRetweets + ", new # of retweets = " + tweet.retweet_count );
+    valsRange[idxRow][settings.headerInfo.idx_retweet] = tweet.retweet_count;
+    valsRange[idxRow][settings.headerInfo.idx_favorite] = tweet.favorite_count;
+    range.setValues( valsRange ); // Update the sheet
+    // logOut( "Updated: idx row = [" + idxRow + "], id=[" + tweet.id_str + "], prev # of retweets = " + prevCountRetweets + ", new # of retweets = " + tweet.retweet_count );
   } catch ( e ) {
     Logger.log("EXCEPTION: aupdateExistingTweet: " + e.message);
   }
@@ -667,10 +803,10 @@ function isSafeTweet( tweet:Tweet, settings:Settings ) {
 // Desc:
 //  Check if the specified Tweet has already been recorded (true) or not (false).
 //
-function getRowIndexTweets(rngVals, tweet:Tweet, settings:Settings) {
+function getRowIndexTweets(valsRange, tweet:Tweet, settings:Settings) {
   let r = 0;
-  for (; r < rngVals.length; r++) {
-    let row = rngVals[r];
+  for (; r < valsRange.length; r++) {
+    let row = valsRange[r];
     if (!row[settings.headerInfo.idx_tweetId]) {
       break;
     }
@@ -688,10 +824,10 @@ function getRowIndexTweets(rngVals, tweet:Tweet, settings:Settings) {
 function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
   let lastRow = sheet.getLastRow();
   if ( 0 < lastRow - (settings.headerInfo.idx_row + 1 )) {
-    let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+    let range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES_DATA.length);
     if (range) {
-      let rngVals = range.getValues();
-      if ( -1 == getRowIndexTweets(rngVals, tweet, settings)) {
+      let valsRange = range.getValues();
+      if ( -1 == getRowIndexTweets(valsRange, tweet, settings)) {
         return false;
       }
     }
@@ -706,17 +842,17 @@ function isNeededToBeAdded( sheet, tweet:Tweet, settings:Settings) {
 // Return:
 //  Total point per update
 //
-function updateSheet(sheet, settings:Settings, tweets:Tweet[]):Stats {
+function updateSheet(sheet, indexSheet:number, settings:Settings, tweets:Tweet[]):Stats {
   let stats:Stats = new Stats();
   let lastRow = sheet.getLastRow();
   let isInitial = true;
   let range = null;
-  let rngVals = null;
+  let valsRange = null;
   if ( 0 < lastRow - (settings.headerInfo.idx_row + 1 )) {
     isInitial = false;
-    range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+    range = sheet.getRange(settings.headerInfo.idx_row + 2, 1, lastRow - (settings.headerInfo.idx_row + 1), CELL_HEADER_TITLES_DATA.length);
     if (range) {
-      rngVals = range.getValues();
+      valsRange = range.getValues();
     }
   }
   for ( let i = tweets.length - 1; i >= 0; i--) {
@@ -725,16 +861,16 @@ function updateSheet(sheet, settings:Settings, tweets:Tweet[]):Stats {
     }
     if ( isInitial ) {
         // pure new Tweet which needs to be ADDED
-        addTweetDataAtBottom(sheet, tweets[i], settings, stats);
+        addTweetDataAtBottom(sheet, indexSheet, tweets[i], settings, stats);
     }
-    else if ( range && rngVals ) {
-      let idxRow = getRowIndexTweets(rngVals, tweets[i], settings);
+    else if ( range && valsRange ) {
+      let idxRow = getRowIndexTweets(valsRange, tweets[i], settings);
       if ( -1 == idxRow ) {
         // pure new Tweet which needs to be ADDED
-        addTweetDataAtBottom(sheet, tweets[i], settings, stats);
+        addTweetDataAtBottom(sheet, indexSheet, tweets[i], settings, stats);
       } else {
         // already recorded Tweet which needs to be UPDATED
-        updateExistingTweet(range, rngVals, idxRow, tweets[i], settings, stats);
+        updateExistingTweet(range, valsRange, idxRow, tweets[i], settings, stats);
       }
     }
   }
@@ -768,9 +904,9 @@ function getSettings (sheet) {
   let ptAlertThreshold = null;
   let rowEndSettings   = null;
 
-  let rngVals = range.getValues();
-  for(let r = 0; r < rngVals.length ; r++) {
-    var row = rngVals[r];
+  let valsRange = range.getValues();
+  for(let r = 0; r < valsRange.length ; r++) {
+    var row = valsRange[r];
     var title:string = String(row[0]);
     if( title ) {
       title = title.replace(/\s+/g, '').toLowerCase().trim();
@@ -871,15 +1007,16 @@ function getSettings (sheet) {
       case CELL_SETTINGS_TITLE_LAST_KEYWORD:
         {
           let val:string = String(row[1]);
-          if ( !val ) break;
-          lastKeyword = val;
+          if ( val ) {
+            lastKeyword = val;
+          }
           row[1] = currentKeyword;
         }
         break;
 
       case CELL_SETTINGS_TITLE_LAST_UPDATED:
         {
-          row[1] = g_datetime;
+          row[1] = g_timestamp;
         }
         break;
 
@@ -894,7 +1031,7 @@ function getSettings (sheet) {
       }
     }
   }
-  range.setValues( rngVals );
+  range.setValues( valsRange );
   return new Settings (currentKeyword, lastKeyword, limitTweets, emails, banWords, banUsers, bDownloadMedia, ptTweet, ptRetweet, ptReply, ptMedia, ptFavorite, ptAlertThreshold, rowEndSettings, null);
 }
 
@@ -928,20 +1065,20 @@ function getSettingsActual( settingsCommon:Settings, settingsLocal:Settings ) {
 //
 //
 function getHeaderInfo( sheet ) {
-  let range = sheet.getRange( 1, 1, MAX_ROW_SEEK_HEADER, CELL_HEADER_TITLES.length);
+  let range = sheet.getRange( 1, 1, MAX_ROW_SEEK_HEADER, CELL_HEADER_TITLES_DATA.length);
   if (range == null) {
     return;
   }
-  let rngVals = range.getValues();
+  let valsRange = range.getValues();
   let r = 0, c;
   let row;
   let rowHeader = -1;
-  for( ; r < rngVals.length ; r++) {
-    row = rngVals[r];
+  for( ; r < valsRange.length ; r++) {
+    row = valsRange[r];
     for (c = 0; c < row.length; c ++ ) {
       var title:string = String(row[c]);
       title = title.replace(/\s+/g, '').toLowerCase().trim();
-      if (title == CELL_HEADER_TITLES[0].replace(/\s+/g,'').toLowerCase().trim()) {
+      if (title == CELL_HEADER_TITLES_DATA[0].replace(/\s+/g,'').toLowerCase().trim()) {
         rowHeader = r;
         break;
       }
@@ -954,7 +1091,7 @@ function getHeaderInfo( sheet ) {
 
   let headerInfo = new HeaderInfo();
   headerInfo.idx_row = r;
-  for( c = 0; c < rngVals.length; c++) {
+  for( c = 0; c < valsRange.length; c++) {
     var title:string = String(row[c]);
     title = title.replace(/\s+/g, '').toLowerCase().trim();
     switch ( title ) {
@@ -1011,6 +1148,7 @@ function getHeaderInfo( sheet ) {
 function main() {
   let sheets = g_book.getSheets();
 
+  let indexSheet = 0;
   sheets.forEach((sheet) => {
     let sheetName:string = sheet.getName();
     if (sheetName.toLocaleLowerCase().trim().startsWith('!')) {
@@ -1027,10 +1165,6 @@ function main() {
     // loading local settings
     //
     let settingsLocal = getSettings( sheet );
-
-    if ( !settingsLocal.currentKeyword || settingsLocal.lastKeyword != settingsLocal.currentKeyword ) {
-      gsClearData(sheet, settingsLocal.rowEndSettings + 1);
-    }
     if ( !settingsLocal.currentKeyword ) {
       return;
     }
@@ -1049,14 +1183,20 @@ function main() {
     }
     settingsActual.headerInfo = headerInfo;
 
+    if ( !settingsLocal.currentKeyword || settingsLocal.lastKeyword != settingsLocal.currentKeyword ) {
+      gsClearData(sheet, headerInfo.idx_row + 2);
+    }
+
     var tweets = twSearchTweet(settingsActual.currentKeyword);
     if (null != tweets && 0 < tweets.length) {
-      let stats:Stats = updateSheet(sheet, settingsActual, tweets);
+      let stats:Stats = updateSheet(sheet, indexSheet, settingsActual, tweets);
       let pt = getPoint(stats, settingsActual);
       if ( pt > settingsActual.ptAlertThreshold ) {
         sendMail(sheet, stats, settingsActual);
       }
+      addHistory( sheet.getName(), indexSheet, stats, settingsActual );
     }
+    indexSheet ++;
   });
 }
 
@@ -1091,80 +1231,14 @@ function duplicateBook( dateNow: Date) {
 }
 
 //
-// Name: insertHeader
+// Name: moveData
 // Desc:
-//  Insert the header row at the specified row (1-based)
 //
-function inseartHeader(sheet, row) {
-  let rangeHeader = sheet.getRange(row, 1, 1, CELL_HEADER_TITLES.length);
-  let valsHeader = rangeHeader.getValues();
-  CELL_HEADER_TITLES.forEach( (val, c) =>{
-    valsHeader[0][c] = val;
-  } );
-  rangeHeader.setValues(valsHeader);
-}
-
 //
-// Name: getSheet
-// Desc:
-//  Get access to the specified sheet in the book for backup, and if it doesn't exist, create the book and sheet
-//
-function getSheet( folderParent, pathTarget:string, nameSheet:string, indexSheet:number ) {
-  let pathSplit = pathTarget.split("/");
-  let listPath = [];
-  let nameFile = null;
-  for( let i=0 ; i<pathSplit.length; i++) {
-    if (pathSplit[i].length > 0 ) {
-      if ( i == pathSplit.length -1) {
-        nameFile = pathSplit[i];
-        break;
-      }
-      listPath.push(pathSplit[i]);
-    }
-  }
-  if ( null == nameFile ) {
-    errOut("getFile() - wrong path name - " + pathTarget );
-    return null;
-  }
-
-  let folderTarget = folderParent;
-  for(let i = 0; i<listPath.length; i++){
-    if( folderTarget.getFoldersByName(listPath[i]).hasNext()){
-      folderTarget = folderTarget.getFoldersByName(listPath[i]).next();
-    } else {
-      folderTarget = folderTarget.createFolder( listPath[i] );
-    }
-  }
-  let fileTarget = folderTarget.getFilesByName(nameFile)
-  let book = null;
-  let sheet = null;
-  if (fileTarget && fileTarget.hasNext()) {
-    let file = fileTarget.next();
-    book = SpreadsheetApp.openById(file.getId());
-    sheet = book.getSheetByName(nameSheet);
-    if ( !sheet ) {
-      sheet = book.insertSheet(nameSheet, indexSheet);
-      inseartHeader( sheet, 1);
-    }
-  } else {
-    book = SpreadsheetApp.create(nameFile);
-    book.getActiveSheet().setName(nameSheet);
-    let idBook = DriveApp.getFileById(book.getId());
-    folderTarget.addFile(idBook);
-    sheet = book.getActiveSheet();
-    inseartHeader( sheet, 1);
-  }
-  return sheet;
-}
-
-//
-// Name: getSheet
-// Desc:
-//  Get access to the specified book on G-drive, and if it doesn't exist, create the file
-//
-function moveData( nameBook:string, nameSheet:string, indexSheet:number, rngValsSrc:number[][], rowStart:number, rowNum:number ) {
+function moveData( nameBookSrc:string, fullYear:number, month:number, nameSheet:string, indexSheet:number, valsRangeSrc:number[][], rowStart:number, rowNum:number ) {
   try {
-    let sheetBackup = getSheet(g_folderBackup, nameBook, nameSheet, indexSheet);
+    let nameBook:string = nameBookSrc + "/" + String(fullYear)+ "_" + ('00'+month).slice(-2);
+    let sheetBackup = getSheet(g_folderBackup, nameBook, nameSheet, indexSheet, inseartHeaderData);
 
     let lastRowBackup = sheetBackup.getLastRow();
     let maxRowsBackup = sheetBackup.getMaxRows();
@@ -1172,16 +1246,16 @@ function moveData( nameBook:string, nameSheet:string, indexSheet:number, rngVals
     if ( maxRowsBackup - lastRowBackup < rowNum ) {
       sheetBackup.insertRowsAfter(sheetBackup.getMaxRows(), rowNum - (maxRowsBackup - lastRowBackup));
     }
-    let rangeBackup = sheetBackup.getRange(sheetBackup.getLastRow() + 1, 1, rowNum, CELL_HEADER_TITLES.length);
+    let rangeBackup = sheetBackup.getRange(sheetBackup.getLastRow() + 1, 1, rowNum, CELL_HEADER_TITLES_DATA.length);
     if ( rangeBackup ) {
-      let rngValsBackup = rangeBackup.getValues();
+      let valsRangeBackup = rangeBackup.getValues();
       for ( let r=0; r<rowNum; r++) {
-        for (let c=0; c< CELL_HEADER_TITLES.length; c++){
-          rngValsBackup[r][c] = rngValsSrc[rowStart + r][c];
+        for (let c=0; c< CELL_HEADER_TITLES_DATA.length; c++){
+          valsRangeBackup[r][c] = valsRangeSrc[rowStart + r][c];
         }
-        rngValsBackup[r][0] = '=HYPERLINK("https://twitter.com/' + rngValsBackup[r][4] + '/status/' + rngValsBackup[r][0] + '", "' + rngValsBackup[r][0] + '")';
+        valsRangeBackup[r][0] = '=HYPERLINK("https://twitter.com/' + valsRangeBackup[r][4] + '/status/' + valsRangeBackup[r][0] + '", "' + valsRangeBackup[r][0] + '")';
       }
-      rangeBackup.setValues(rngValsBackup);
+      rangeBackup.setValues(valsRangeBackup);
     }
     return true;
   } catch (ex) {
@@ -1199,7 +1273,8 @@ function backup() {
   let sheets = g_book.getSheets();
   let nameBook = g_book.getName();
 
-  sheets.forEach((sheet, index) => {
+  let indexSheet = 0;
+  sheets.forEach((sheet) => {
     let sheetName:string = sheet.getName();
     if (sheetName.toLocaleLowerCase().trim().startsWith('!')) {
       return;
@@ -1217,17 +1292,21 @@ function backup() {
     let lastMonth:number = -1;
     let lastRow = sheet.getLastRow();
     if ( 0 < lastRow - (headerInfo.idx_row + 1 )) {
-      let range = sheet.getRange(headerInfo.idx_row + 2, 1, lastRow - (headerInfo.idx_row + 1), CELL_HEADER_TITLES.length);
+      let range = sheet.getRange(headerInfo.idx_row + 2, 1, lastRow - (headerInfo.idx_row + 1), CELL_HEADER_TITLES_DATA.length);
       if (range) {
-        let rngVals = range.getValues();
+        let valsRange = range.getValues();
         let rowNumBackuped = 0;
         let r = 0;
-        for ( ; r < rngVals.length; r++) {
-          let row = rngVals[r];
+        for ( ; r < valsRange.length; r++) {
+          let row = valsRange[r];
 
           let strCreatedAt:string = String(row[headerInfo.idx_createdAt]);
           strCreatedAt = strCreatedAt.replace('(','').replace(')','').replace(' ','T') + "+09:00";
           let dateCreatedAt = new Date( strCreatedAt );
+
+          if ( g_datetime.getTime() - dateCreatedAt.getTime() <= DURATION_MILLISEC_NOT_FOR_BACKUP ) {
+            break;
+          }
 
           let year:number = dateCreatedAt.getFullYear();
           let month:number = 1 + dateCreatedAt.getMonth();
@@ -1236,9 +1315,7 @@ function backup() {
             lastFullYear = year;
             lastMonth = month;
           } else if ( month != lastMonth ) {
-            let strYear:string = String(lastFullYear);
-            let strMonth:string = ('00'+lastMonth).slice(-2);
-            if ( ! moveData( nameBook + "/" + strYear + "-" + strMonth, sheetName, index, rngVals, rowNumBackuped, r - rowNumBackuped) ) {
+            if ( ! moveData( nameBook, lastFullYear, lastMonth, sheetName, indexSheet, valsRange, rowNumBackuped, r - rowNumBackuped) ) {
               errOut("BACKUP PROCESS WAS TERMINATED.");
               return;
             }
@@ -1247,16 +1324,19 @@ function backup() {
             rowNumBackuped = r;
           }
         }
+
         if ( r - rowNumBackuped > 0 ) {
-            let strYear:string = String(lastFullYear);
-            let strMonth:string = ('00'+lastMonth).slice(-2);
-            if ( ! moveData( nameBook + "/" + strYear + "_" + strMonth, sheetName, index, rngVals, rowNumBackuped, r - rowNumBackuped) ) {
+            if ( ! moveData( nameBook, lastFullYear, lastMonth, sheetName, indexSheet, valsRange, rowNumBackuped, r - rowNumBackuped) ) {
               errOut("BACKUP PROCESS WAS TERMINATED.");
               return;
             }
+            rowNumBackuped = r;
+        }
+        if ( rowNumBackuped > 0 ) {
+          sheet.deleteRows(headerInfo.idx_row + 2, rowNumBackuped);
         }
       }
-      sheet.deleteRows(headerInfo.idx_row + 2, lastRow - (headerInfo.idx_row + 1 ));
     }
+    indexSheet ++;
   });
 }
